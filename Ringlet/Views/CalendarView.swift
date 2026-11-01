@@ -1,0 +1,144 @@
+import SwiftData
+import SwiftUI
+
+/// A month at a glance. Days with reminders get a dot (red when one was missed); tap a day to see its list.
+struct CalendarView: View {
+    @Query private var reminders: [Reminder]
+    @Query private var marks: [OccurrenceMark]
+    @State private var month = Calendar.current.dateInterval(of: .month, for: .now)?.start ?? .now
+    @State private var selected = Calendar.current.startOfDay(for: .now)
+    @State private var isAdding = false
+    @State private var isShowingSettings = false
+
+    var body: some View {
+        List {
+            Section {
+                MonthGrid(month: $month, selected: $selected, reminders: reminders, marks: Planner.marksByKey(marks))
+                    .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 12, trailing: 8))
+            }
+            OccurrenceList(day: selected)
+        }
+        .ringletBackground()
+        .navigationTitle("Calendar")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { isShowingSettings = true } label: { Label("Settings", systemImage: "gearshape") }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                AddButton { isAdding = true }
+            }
+        }
+        .sheet(isPresented: $isAdding) { TypePickerView(startDay: selected) }
+        .sheet(isPresented: $isShowingSettings) { SettingsView() }
+    }
+}
+
+private struct MonthGrid: View {
+    @Binding var month: Date
+    @Binding var selected: Date
+    let reminders: [Reminder]
+    let marks: [String: OccurrenceMark]
+
+    private let calendar = Calendar.current
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Button { shift(-1) } label: {
+                    Image(systemName: "chevron.left").font(.headline).frame(width: 44, height: 36)
+                }
+                .accessibilityLabel("Previous month")
+                Spacer()
+                Text(month.formatted(.dateTime.month(.wide).year()))
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(Color.heading)
+                Spacer()
+                Button { shift(1) } label: {
+                    Image(systemName: "chevron.right").font(.headline).frame(width: 44, height: 36)
+                }
+                .accessibilityLabel("Next month")
+            }
+            .buttonStyle(.borderless)
+
+            LazyVGrid(columns: columns, spacing: 4) {
+                ForEach(weekdayHeaders, id: \.self) { name in
+                    Text(name.uppercased())
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(days, id: \.self) { day in
+                    dayCell(day)
+                }
+            }
+        }
+        .gesture(
+            DragGesture(minimumDistance: 40).onEnded { value in
+                guard abs(value.translation.width) > abs(value.translation.height) * 2 else { return }
+                shift(value.translation.width < 0 ? 1 : -1)
+            }
+        )
+    }
+
+    private func dayCell(_ day: Date) -> some View {
+        let occurrences = Planner.occurrences(on: day, reminders: reminders, marks: marks)
+        let missed = occurrences.contains { Planner.status(of: $0, marks: marks) == .missed }
+        let isSelected = calendar.isDate(day, inSameDayAs: selected)
+        let inMonth = calendar.isDate(day, equalTo: month, toGranularity: .month)
+        let isToday = calendar.isDateInToday(day)
+
+        return Button {
+            selected = day
+            if !inMonth { month = calendar.dateInterval(of: .month, for: day)?.start ?? month }
+        } label: {
+            VStack(spacing: 4) {
+                Text(day.formatted(.dateTime.day()))
+                    .font(.body.weight(isToday ? .bold : .regular))
+                    .monospacedDigit()
+                Circle()
+                    .fill(missed ? Color.red : (isSelected ? Color.white : Color.accentColor))
+                    .frame(width: 6, height: 6)
+                    .opacity(occurrences.isEmpty ? 0 : 1)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .foregroundStyle(isSelected ? Color.white : (inMonth ? Color.primary : Color.secondary.opacity(0.6)))
+            .background {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(isSelected ? Color.accentColor : Color.clear)
+            }
+            .overlay {
+                if isToday && !isSelected {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(Color.accentColor, lineWidth: 1.5)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(day.formatted(date: .complete, time: .omitted)), \(occurrences.count) reminders")
+    }
+
+    private var weekdayHeaders: [String] {
+        let symbols = calendar.shortWeekdaySymbols
+        let first = calendar.firstWeekday - 1
+        return Array(symbols[first...] + symbols[..<first])
+    }
+
+    /// Six full weeks, starting on the week that holds the 1st.
+    private var days: [Date] {
+        guard let firstWeek = calendar.dateInterval(of: .weekOfMonth, for: month)?.start else { return [] }
+        return (0..<42).compactMap { calendar.date(byAdding: .day, value: $0, to: firstWeek) }
+    }
+
+    private func shift(_ months: Int) {
+        withAnimation(.snappy) {
+            month = calendar.date(byAdding: .month, value: months, to: month) ?? month
+        }
+    }
+}
+
+#Preview {
+    NavigationStack { CalendarView() }
+        .modelContainer(PreviewContainer.shared)
+}

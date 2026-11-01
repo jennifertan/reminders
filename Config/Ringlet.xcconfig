@@ -1,0 +1,6 @@
+// Shared build settings for the Ringlet target.
+//
+// Ringlet has no API keys today. Anything private goes in Config/Secrets.xcconfig, which is
+// gitignored, so it never reaches GitHub.
+
+#include? "Secrets.xcconfig"
