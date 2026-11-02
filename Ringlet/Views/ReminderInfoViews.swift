@@ -89,7 +89,11 @@ struct RescheduleView: View {
                     }
                     .buttonStyle(.bordered)
                 } footer: {
-                    Text("Moves only the \(original.formatted(date: .abbreviated, time: .shortened)) reminder.")
+                    if occurrence.reminder.kind == .oneTime {
+                        Text("Moves this reminder to the new date and time.")
+                    } else {
+                        Text("Moves only the \(original.formatted(date: .abbreviated, time: .shortened)) reminder. The rest of the schedule stays the same.")
+                    }
                 }
                 if occurrence.isMoved {
                     Section {
@@ -107,9 +111,13 @@ struct RescheduleView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Move") {
-                        let mark = OccurrenceMark.findOrInsert(occurrence.key, in: modelContext)
-                        mark.movedTo = date == original ? nil : date
-                        mark.isDone = false
+                        if occurrence.reminder.kind == .oneTime {
+                            moveOneTimeReminder()
+                        } else {
+                            let mark = OccurrenceMark.findOrInsert(occurrence.key, in: modelContext)
+                            mark.movedTo = date == original ? nil : date
+                            mark.isDone = false
+                        }
                         finish()
                     }
                 }
@@ -123,6 +131,18 @@ struct RescheduleView: View {
     private func quick(_ title: String, minutes: Int) -> some View {
         Button(title) { date = date.addingTimeInterval(Double(minutes) * 60) }
             .font(.footnote)
+    }
+
+    /// A one-time reminder has only this ring, so move the reminder itself. That way the
+    /// Reminders tab and Calendar show the new date too.
+    private func moveOneTimeReminder() {
+        let calendar = Calendar.current
+        let reminder = occurrence.reminder
+        reminder.start = calendar.startOfDay(for: date)
+        reminder.times = [calendar.component(.hour, from: date) * 60 + calendar.component(.minute, from: date)]
+        if let mark = OccurrenceMark.find(occurrence.key, in: modelContext) {
+            modelContext.delete(mark)
+        }
     }
 
     private func finish() {

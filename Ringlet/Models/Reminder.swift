@@ -343,3 +343,24 @@ extension AlarmedImport {
         if loadedAny { UserDefaults.standard.set(true, forKey: key) }
     }
 }
+
+extension OccurrenceMark {
+    /// Older builds moved a one-time reminder's only ring with a mark, which left the reminder
+    /// itself on the old date. Moves those reminders properly.
+    static func applyMovedOneTimeReminders(in context: ModelContext) {
+        let marks = (try? context.fetch(FetchDescriptor<OccurrenceMark>(predicate: #Predicate { $0.movedTo != nil }))) ?? []
+        guard !marks.isEmpty else { return }
+        let reminders = (try? context.fetch(FetchDescriptor<Reminder>())) ?? []
+        let byID = Dictionary(reminders.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let calendar = Calendar.current
+        for mark in marks {
+            guard let moved = mark.movedTo, let parsed = Planner.parse(mark.key),
+                  let reminder = byID[parsed.reminderID], reminder.kind == .oneTime
+            else { continue }
+            reminder.start = calendar.startOfDay(for: moved)
+            reminder.times = [calendar.component(.hour, from: moved) * 60 + calendar.component(.minute, from: moved)]
+            context.delete(mark)
+        }
+        try? context.save()
+    }
+}
