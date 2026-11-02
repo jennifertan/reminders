@@ -149,3 +149,94 @@ final class OccurrenceMark {
         }
     }
 }
+
+/// A done item brought in from another app, kept for the Done History screen only.
+@Model
+final class ArchivedDone {
+    /// The other app's id, so importing the same file twice doesn't add duplicates.
+    @Attribute(.unique) var sourceID: String
+    var source: String
+    var title: String
+    var notes: String
+    var completedAt: Date
+    var dueAt: Date?
+    /// For example "Every 2 weeks", or empty for a one-off.
+    var repeatSummary: String
+
+    init(sourceID: String, source: String, title: String, notes: String, completedAt: Date, dueAt: Date?, repeatSummary: String) {
+        self.sourceID = sourceID
+        self.source = source
+        self.title = title
+        self.notes = notes
+        self.completedAt = completedAt
+        self.dueAt = dueAt
+        self.repeatSummary = repeatSummary
+    }
+}
+
+/// Reads the done-items export made from an Alarmed backup.
+enum AlarmedImport {
+    private struct File: Decodable {
+        let items: [Item]
+    }
+
+    private struct Item: Decodable {
+        let id: String
+        let title: String
+        let notes: String?
+        let dueDate: String?
+        let completedDate: String
+        let repeatRule: Repeat?
+
+        enum CodingKeys: String, CodingKey {
+            case id, title, notes, dueDate, completedDate
+            case repeatRule = "repeat"
+        }
+    }
+
+    private struct Repeat: Decodable {
+        let frequency: String
+        let interval: Int
+    }
+
+    /// Adds the file's items that aren't already in the store, and returns how many were added.
+    @discardableResult
+    static func run(data: Data, into context: ModelContext) throws -> Int {
+        let file = try JSONDecoder().decode(File.self, from: data)
+        let existing = Set(((try? context.fetch(FetchDescriptor<ArchivedDone>())) ?? []).map(\.sourceID))
+        let instant = ISO8601DateFormatter()
+        // Alarmed stores alarm times as wall-clock times with no zone.
+        let local = DateFormatter()
+        local.locale = Locale(identifier: "en_US_POSIX")
+        local.timeZone = .current
+        local.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+
+        var added = 0
+        for item in file.items where !existing.contains("alarmed:" + item.id) {
+            guard let completed = instant.date(from: item.completedDate) else { continue }
+            context.insert(ArchivedDone(
+                sourceID: "alarmed:" + item.id,
+                source: "Alarmed",
+                title: item.title,
+                notes: item.notes ?? "",
+                completedAt: completed,
+                dueAt: item.dueDate.flatMap(local.date(from:)),
+                repeatSummary: item.repeatRule.map(summary) ?? ""
+            ))
+            added += 1
+        }
+        try context.save()
+        return added
+    }
+
+    private static func summary(_ rule: Repeat) -> String {
+        let unit = switch rule.frequency {
+        case "daily": "day"
+        case "weekly": "week"
+        case "monthly": "month"
+        case "yearly": "year"
+        default: rule.frequency
+        }
+        return rule.interval == 1 ? "Every \(unit)" : "Every \(rule.interval) \(unit)s"
+    }
+}

@@ -74,7 +74,7 @@ extension Reminder {
 enum PreviewContainer {
     static let shared: ModelContainer = {
         let container = try! ModelContainer(
-            for: Reminder.self, OccurrenceMark.self,
+            for: Reminder.self, OccurrenceMark.self, ArchivedDone.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
         Reminder.makeSamples().forEach { container.mainContext.insert($0) }

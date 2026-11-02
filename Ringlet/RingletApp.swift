@@ -6,7 +6,7 @@ import SwiftUI
 enum Store {
     static let container: ModelContainer = {
         do {
-            return try ModelContainer(for: Reminder.self, OccurrenceMark.self)
+            return try ModelContainer(for: Reminder.self, OccurrenceMark.self, ArchivedDone.self)
         } catch {
             fatalError("Couldn't open the reminder store: \(error)")
         }

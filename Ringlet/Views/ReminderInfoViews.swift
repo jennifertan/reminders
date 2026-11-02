@@ -133,17 +133,24 @@ struct RescheduleView: View {
     }
 }
 
-/// Every ring that was marked done, newest first, grouped by day.
+/// Every ring that was marked done, newest first, grouped by day, plus done items imported from Alarmed.
 struct HistoryView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @Query private var reminders: [Reminder]
     @Query(filter: #Predicate<OccurrenceMark> { $0.isDone }) private var marks: [OccurrenceMark]
+    @Query private var archived: [ArchivedDone]
     @State private var search = ""
+    @State private var isImporting = false
+    @State private var importResult: String?
 
     private struct Entry: Identifiable {
         let id: String
-        let reminder: Reminder
+        let title: String
+        let notes: String
         let date: Date
+        let detail: String
+        let reminder: Reminder?
     }
 
     var body: some View {
@@ -153,29 +160,17 @@ struct HistoryView: View {
                     ContentUnavailableView {
                         Label("Nothing Done Yet", systemImage: "checkmark.circle")
                     } description: {
-                        Text("Reminders you mark as done show up here.")
+                        Text("Reminders you mark as done show up here. Tap Import to bring in done items from Alarmed.")
                     }
                     .listRowBackground(Color.clear)
                 } else if filtered.isEmpty {
                     ContentUnavailableView.search(text: search)
                         .listRowBackground(Color.clear)
                 } else {
-                    ForEach(days, id: \.self) { day in
-                        Section(day.formatted(.dateTime.weekday(.wide).day().month(.wide).year())) {
-                            ForEach(filtered.filter { Calendar.current.isDate($0.date, inSameDayAs: day) }) { entry in
-                                HStack(spacing: 14) {
-                                    ReminderImage(entry.reminder)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(entry.reminder.message).font(.headline)
-                                        Text(entry.date, style: .time)
-                                            .font(.subheadline)
-                                            .monospacedDigit()
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Spacer(minLength: 0)
-                                    Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
-                                }
-                                .padding(.vertical, 2)
+                    ForEach(byDay, id: \.day) { group in
+                        Section(group.day.formatted(.dateTime.weekday(.wide).day().month(.wide).year())) {
+                            ForEach(group.entries) { entry in
+                                row(entry)
                             }
                         }
                     }
@@ -186,31 +181,91 @@ struct HistoryView: View {
             .navigationTitle("Done History")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Import") { isImporting = true }
+                }
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+            .fileImporter(isPresented: $isImporting, allowedContentTypes: [.json]) { result in
+                importFile(result)
+            }
+            .alert("Import", isPresented: Binding(get: { importResult != nil }, set: { if !$0 { importResult = nil } })) {
+                Button("OK") {}
+            } message: {
+                Text(importResult ?? "")
             }
         }
     }
 
+    private func row(_ entry: Entry) -> some View {
+        HStack(spacing: 14) {
+            if let reminder = entry.reminder {
+                ReminderImage(reminder)
+            } else {
+                Image(systemName: "checkmark")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Color.secondary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.title).font(.headline)
+                Text(entry.date, style: .time)
+                    .font(.subheadline)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                if !entry.detail.isEmpty {
+                    Text(entry.detail).font(.footnote).foregroundStyle(.secondary)
+                }
+                if !entry.notes.isEmpty {
+                    Text(entry.notes).font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                }
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
+        }
+        .padding(.vertical, 2)
+    }
+
     private var entries: [Entry] {
         let byID = Dictionary(reminders.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        return marks.compactMap { mark in
+        let fromMarks: [Entry] = marks.compactMap { mark in
             guard let parsed = Planner.parse(mark.key), let reminder = byID[parsed.reminderID] else { return nil }
-            return Entry(id: mark.key, reminder: reminder, date: mark.movedTo ?? parsed.date)
+            return Entry(id: mark.key, title: reminder.message, notes: "", date: mark.movedTo ?? parsed.date,
+                         detail: reminder.rule.summary, reminder: reminder)
         }
-        .sorted { $0.date > $1.date }
+        let fromArchive = archived.map { item in
+            Entry(id: item.sourceID, title: item.title, notes: item.notes, date: item.completedAt,
+                  detail: ([item.source] + (item.repeatSummary.isEmpty ? [] : [item.repeatSummary])).joined(separator: " · "),
+                  reminder: nil)
+        }
+        return (fromMarks + fromArchive).sorted { $0.date > $1.date }
     }
 
     private var filtered: [Entry] {
         let query = search.trimmingCharacters(in: .whitespaces)
         guard !query.isEmpty else { return entries }
         return entries.filter {
-            $0.reminder.message.localizedCaseInsensitiveContains(query)
-                || $0.reminder.notes.localizedCaseInsensitiveContains(query)
+            $0.title.localizedCaseInsensitiveContains(query) || $0.notes.localizedCaseInsensitiveContains(query)
         }
     }
 
-    private var days: [Date] {
-        var seen = Set<Date>()
-        return filtered.map { Calendar.current.startOfDay(for: $0.date) }.filter { seen.insert($0).inserted }
+    /// Newest day first; entries are already newest first.
+    private var byDay: [(day: Date, entries: [Entry])] {
+        Dictionary(grouping: filtered) { Calendar.current.startOfDay(for: $0.date) }
+            .sorted { $0.key > $1.key }
+            .map { ($0.key, $0.value) }
+    }
+
+    private func importFile(_ result: Result<URL, Error>) {
+        do {
+            let url = try result.get()
+            let isScoped = url.startAccessingSecurityScopedResource()
+            defer { if isScoped { url.stopAccessingSecurityScopedResource() } }
+            let added = try AlarmedImport.run(data: try Data(contentsOf: url), into: modelContext)
+            importResult = added == 0 ? "Everything in that file is already here." : "Added \(added) done items."
+        } catch {
+            importResult = "Couldn't read that file. Pick the alarmed-done-history.json export."
+        }
     }
 }
