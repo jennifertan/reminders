@@ -1,7 +1,7 @@
 import SwiftData
 import SwiftUI
 
-/// A month at a glance. Days with reminders get a dot (red when one was missed); tap a day to see its list.
+/// A month at a glance. Days get a dot per reminder in its picture color (red when missed); tap a day to see its list.
 struct CalendarView: View {
     @Query private var reminders: [Reminder]
     @Query private var marks: [OccurrenceMark]
@@ -75,6 +75,7 @@ private struct MonthGrid: View {
     @Binding var selected: Date
     let reminders: [Reminder]
     let marks: [String: OccurrenceMark]
+    @Environment(\.colorScheme) private var colorScheme
 
     private let calendar = Calendar.current
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
@@ -119,7 +120,6 @@ private struct MonthGrid: View {
 
     private func dayCell(_ day: Date) -> some View {
         let occurrences = Planner.occurrences(on: day, reminders: reminders, marks: marks)
-        let missed = occurrences.contains { Planner.status(of: $0, marks: marks) == .missed }
         let isSelected = calendar.isDate(day, inSameDayAs: selected)
         let inMonth = calendar.isDate(day, equalTo: month, toGranularity: .month)
         let isToday = calendar.isDateInToday(day)
@@ -132,10 +132,7 @@ private struct MonthGrid: View {
                 Text(day.formatted(.dateTime.day()))
                     .font(.body.weight(isToday ? .bold : .regular))
                     .monospacedDigit()
-                Circle()
-                    .fill(missed ? Color.red : (isSelected ? Color.white : Color.accentColor))
-                    .frame(width: 6, height: 6)
-                    .opacity(occurrences.isEmpty ? 0 : 1)
+                dots(for: occurrences, isSelected: isSelected)
             }
             .frame(maxWidth: .infinity, minHeight: 44)
             .foregroundStyle(isSelected ? Color.white : (inMonth ? Color.primary : Color.secondary.opacity(0.6)))
@@ -153,6 +150,28 @@ private struct MonthGrid: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(day.formatted(date: .complete, time: .omitted)), \(occurrences.count) reminders")
+    }
+
+    /// One dot per reminder that day, up to three, in the color of its picture. Missed ones are red.
+    private func dots(for occurrences: [Occurrence], isSelected: Bool) -> some View {
+        var seen = Set<UUID>()
+        let firsts = occurrences.filter { seen.insert($0.reminder.id).inserted }.prefix(3)
+        return HStack(spacing: 3) {
+            ForEach(Array(firsts), id: \.key) { occurrence in
+                Circle()
+                    .fill(Planner.status(of: occurrence, marks: marks) == .missed
+                          ? Color.red : dotColor(hue: occurrence.reminder.hue))
+                    .overlay { if isSelected { Circle().strokeBorder(Color.white, lineWidth: 1) } }
+                    .frame(width: 6, height: 6)
+            }
+        }
+        .frame(height: 6)
+    }
+
+    private func dotColor(hue: Double) -> Color {
+        colorScheme == .dark
+            ? Color(hue: hue, saturation: 0.55, brightness: 0.95)
+            : Color(hue: hue, saturation: 0.75, brightness: 0.7)
     }
 
     private var weekdayHeaders: [String] {
