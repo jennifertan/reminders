@@ -141,10 +141,10 @@ struct ReminderFormView: View {
             }
             typeSection
             aboutSection
-            pictureSection
             whenSection
             if draft.rule.kind.repeats { endSection }
             alertSection
+            pictureSection
         }
         .ringletBackground()
         .navigationTitle(existing == nil ? "New \(draft.rule.kind.title)" : "Edit Reminder")
