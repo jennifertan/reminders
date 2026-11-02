@@ -3,12 +3,13 @@ import SwiftUI
 
 /// How the Reminders tab orders reminders. Turned-off reminders always come last.
 enum ReminderSort: String, CaseIterable, Identifiable {
-    case time, type, dateAdded
+    case date, time, type, dateAdded
 
     var id: Self { self }
 
     var title: String {
         switch self {
+        case .date: "Date"
         case .time: "Time"
         case .type: "Type"
         case .dateAdded: "Date Added"
@@ -126,6 +127,8 @@ struct ReminderListView: View {
     private var groups: [(title: String, reminders: [Reminder])] {
         let on = filtered.filter(\.isEnabled)
         switch sort {
+        case .date:
+            return on.isEmpty ? [] : [("", bySoonest(on))]
         case .time:
             return on.isEmpty ? [] : [("", on)]
         case .dateAdded:
@@ -141,6 +144,7 @@ struct ReminderListView: View {
     private var turnedOff: [Reminder] {
         let off = filtered.filter { !$0.isEnabled }
         switch sort {
+        case .date: return bySoonest(off)
         case .time: return off
         case .dateAdded: return off.sorted { $0.createdAt > $1.createdAt }
         case .type:
