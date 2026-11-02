@@ -262,10 +262,11 @@ struct HistoryView: View {
             let url = try result.get()
             let isScoped = url.startAccessingSecurityScopedResource()
             defer { if isScoped { url.stopAccessingSecurityScopedResource() } }
-            let added = try AlarmedImport.run(data: try Data(contentsOf: url), into: modelContext)
-            importResult = added == 0 ? "Everything in that file is already here." : "Added \(added) done items."
+            importResult = try AlarmedImport.message(
+                for: AlarmedImport.run(data: try Data(contentsOf: url), into: modelContext))
+            Task { await NotificationScheduler.reschedule(context: modelContext) }
         } catch {
-            importResult = "Couldn't read that file. Pick the alarmed-done-history.json export."
+            importResult = "Couldn't read that file. Pick one of the Alarmed exports (.json)."
         }
     }
 }

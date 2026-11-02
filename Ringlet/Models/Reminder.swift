@@ -16,6 +16,8 @@ final class Reminder {
     var hue = 0.45
     @Attribute(.externalStorage) var photo: Data?
     var isEnabled = true
+    /// The other app's id when this was imported, so importing again doesn't add duplicates.
+    var importedID: String?
 
     // When it rings
     var start = Calendar.current.startOfDay(for: .now)
@@ -174,8 +176,14 @@ final class ArchivedDone {
     }
 }
 
-/// Reads the done-items export made from an Alarmed backup.
+/// Reads the exports made from an Alarmed backup: done items for Done History, or active
+/// reminders, which become Ringlet reminders.
 enum AlarmedImport {
+    enum Result {
+        case history(added: Int)
+        case reminders(added: Int)
+    }
+
     private struct File: Decodable {
         let items: [Item]
     }
@@ -185,11 +193,13 @@ enum AlarmedImport {
         let title: String
         let notes: String?
         let dueDate: String?
-        let completedDate: String
+        let completedDate: String?
         let repeatRule: Repeat?
+        let leadTime: LeadTime?
+        let nagMinutes: Int?
 
         enum CodingKeys: String, CodingKey {
-            case id, title, notes, dueDate, completedDate
+            case id, title, notes, dueDate, completedDate, leadTime, nagMinutes
             case repeatRule = "repeat"
         }
     }
@@ -197,36 +207,111 @@ enum AlarmedImport {
     private struct Repeat: Decodable {
         let frequency: String
         let interval: Int
+        /// 1 is Sunday, as in Calendar.
+        let daysOfWeekEK: [Int]?
+        /// For monthly rules: 4 is the fourth, -1 the last.
+        let setPositions: [Int]?
+        let endDate: String?
     }
 
-    /// Adds the file's items that aren't already in the store, and returns how many were added.
-    @discardableResult
-    static func run(data: Data, into context: ModelContext) throws -> Int {
+    private struct LeadTime: Decodable {
+        let amount: Int
+        let unit: String
+    }
+
+    /// Adds the file's items that aren't already in the store.
+    static func run(data: Data, into context: ModelContext) throws -> Result {
         let file = try JSONDecoder().decode(File.self, from: data)
+        let result: Result
+        if file.items.contains(where: { $0.completedDate != nil }) {
+            result = .history(added: importHistory(file.items, into: context))
+        } else {
+            result = .reminders(added: importReminders(file.items, into: context))
+        }
+        try context.save()
+        return result
+    }
+
+    private static func importHistory(_ items: [Item], into context: ModelContext) -> Int {
         let existing = Set(((try? context.fetch(FetchDescriptor<ArchivedDone>())) ?? []).map(\.sourceID))
         let instant = ISO8601DateFormatter()
-        // Alarmed stores alarm times as wall-clock times with no zone.
-        let local = DateFormatter()
-        local.locale = Locale(identifier: "en_US_POSIX")
-        local.timeZone = .current
-        local.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
-
         var added = 0
-        for item in file.items where !existing.contains("alarmed:" + item.id) {
-            guard let completed = instant.date(from: item.completedDate) else { continue }
+        for item in items where !existing.contains(sourceID(item)) {
+            guard let completed = item.completedDate.flatMap(instant.date(from:)) else { continue }
             context.insert(ArchivedDone(
-                sourceID: "alarmed:" + item.id,
+                sourceID: sourceID(item),
                 source: "Alarmed",
                 title: item.title,
                 notes: item.notes ?? "",
                 completedAt: completed,
-                dueAt: item.dueDate.flatMap(local.date(from:)),
+                dueAt: item.dueDate.flatMap(localDate),
                 repeatSummary: item.repeatRule.map(summary) ?? ""
             ))
             added += 1
         }
-        try context.save()
         return added
+    }
+
+    private static func importReminders(_ items: [Item], into context: ModelContext) -> Int {
+        let existing = Set(((try? context.fetch(FetchDescriptor<Reminder>())) ?? []).compactMap(\.importedID))
+        let calendar = Calendar.current
+        var added = 0
+        for item in items where !existing.contains(sourceID(item)) {
+            guard let due = item.dueDate.flatMap(localDate) else { continue }
+            let kind: ReminderKind = switch item.repeatRule?.frequency {
+            case "daily": .daily
+            case "weekly": .weekly
+            case "monthly": .monthly
+            case "yearly": .yearly
+            default: .oneTime
+            }
+            let reminder = Reminder(kind: kind)
+            reminder.importedID = sourceID(item)
+            reminder.message = item.title
+            reminder.notes = item.notes ?? ""
+            // The next ring anchors the schedule, so every-2-weeks and every-6-months rules stay in step.
+            reminder.start = calendar.startOfDay(for: due)
+            reminder.times = [calendar.component(.hour, from: due) * 60 + calendar.component(.minute, from: due)]
+            if let rule = item.repeatRule {
+                reminder.interval = max(1, rule.interval)
+                let weekday = calendar.component(.weekday, from: due)
+                reminder.weekdays = rule.daysOfWeekEK ?? [weekday]
+                if kind == .monthly {
+                    if let position = rule.setPositions?.first {
+                        reminder.monthlyModeRaw = MonthlyMode.weekday.rawValue
+                        reminder.nthWeek = position
+                        reminder.nthWeekday = rule.daysOfWeekEK?.first ?? weekday
+                    } else {
+                        reminder.monthDays = [calendar.component(.day, from: due)]
+                    }
+                }
+                if let end = rule.endDate.flatMap(localDate) {
+                    reminder.endModeRaw = EndMode.endDate.rawValue
+                    reminder.endDate = end
+                }
+            }
+            if let lead = item.leadTime {
+                reminder.preAlarmMinutes = lead.amount * (lead.unit == "days" ? 1440 : lead.unit == "hours" ? 60 : 1)
+            }
+            if let nag = item.nagMinutes, nag > 0 {
+                reminder.autoSnoozeMinutes = nag
+                reminder.autoSnoozeTimes = 5
+            }
+            context.insert(reminder)
+            added += 1
+        }
+        return added
+    }
+
+    private static func sourceID(_ item: Item) -> String { "alarmed:" + item.id }
+
+    /// Alarmed stores alarm times as wall-clock times with no zone.
+    private static func localDate(_ text: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        return formatter.date(from: text)
     }
 
     private static func summary(_ rule: Repeat) -> String {
@@ -238,5 +323,16 @@ enum AlarmedImport {
         default: rule.frequency
         }
         return rule.interval == 1 ? "Every \(unit)" : "Every \(rule.interval) \(unit)s"
+    }
+}
+
+extension AlarmedImport {
+    static func message(for result: Result) -> String {
+        switch result {
+        case .history(let added):
+            added == 0 ? "Everything in that file is already in Done History." : "Added \(added) done items to Done History."
+        case .reminders(let added):
+            added == 0 ? "Those reminders are already here." : "Added \(added) reminders. They're switched on and will ring."
+        }
     }
 }
