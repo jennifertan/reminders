@@ -182,6 +182,15 @@ struct ReminderFormView: View {
             Picker("Type", selection: $draft.rule.kind) {
                 ForEach(ReminderKind.allCases) { Text($0.title).tag($0) }
             }
+            if let unit = draft.rule.kind.intervalUnit {
+                Picker("Repeats", selection: $draft.rule.interval) {
+                    ForEach([1, 2, 3, 4, 5, 6, 7, 10, 12, 14, 30], id: \.self) { n in
+                        Text(n == 1 ? "Every \(unit)" : "Every \(n) \(unit)s").tag(n)
+                    }
+                }
+            }
+        } footer: {
+            Text("Rings: \(draft.rule.summary), \(draft.rule.timesSummary)")
         }
     }
 
@@ -331,14 +340,6 @@ struct ReminderFormView: View {
             if kind == .cycle {
                 Stepper("\(draft.rule.cycleOn) days on", value: $draft.rule.cycleOn, in: 1...365)
                 Stepper("\(draft.rule.cycleOff) days off", value: $draft.rule.cycleOff, in: 0...365)
-            }
-
-            if let unit = kind.intervalUnit {
-                Picker("Repeat", selection: $draft.rule.interval) {
-                    ForEach([1, 2, 3, 4, 5, 6, 7, 10, 12, 14, 30], id: \.self) { n in
-                        Text(n == 1 ? "Every \(unit)" : "Every \(n) \(unit)s").tag(n)
-                    }
-                }
             }
         }
     }

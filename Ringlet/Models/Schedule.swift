@@ -190,16 +190,16 @@ extension ScheduleRule {
         return date.formatted(date: .omitted, time: .shortened)
     }
 
-    /// For example "Weekly, Mon to Fri" or "Monthly, days 15, last".
+    /// For example "Every 2 weeks on Mon to Fri" or "Monthly on days 15, last".
     var summary: String {
         let every = max(1, interval)
         switch kind {
         case .oneTime:
             return "One-Time"
         case .daily:
-            return every > 1 ? "Daily, every \(every) days" : "Daily"
+            return every > 1 ? "Every \(every) days" : "Daily"
         case .weekly:
-            return "Weekly, \(Self.weekdayText(weekdays))" + (every > 1 ? ", every \(every) weeks" : "")
+            return (every > 1 ? "Every \(every) weeks" : "Weekly") + " on \(Self.weekdayText(weekdays))"
         case .monthly:
             let which: String
             switch monthlyMode {
@@ -208,11 +208,11 @@ extension ScheduleRule {
                 which = "days " + sorted.map { $0 == 0 ? "last" : String($0) }.joined(separator: ", ")
             case .weekday:
                 let name = Calendar.current.weekdaySymbols[max(1, min(7, nthWeekday)) - 1]
-                which = "\(Self.ordinal(nthWeek).lowercased()) \(name)"
+                which = "the \(Self.ordinal(nthWeek).lowercased()) \(name)"
             }
-            return "Monthly, \(which)" + (every > 1 ? ", every \(every) months" : "")
+            return (every > 1 ? "Every \(every) months" : "Monthly") + " on \(which)"
         case .yearly:
-            return "Yearly, \(start.formatted(.dateTime.month(.abbreviated).day()))" + (every > 1 ? ", every \(every) years" : "")
+            return (every > 1 ? "Every \(every) years" : "Yearly") + " on \(start.formatted(.dateTime.month(.abbreviated).day()))"
         case .wakeUp:
             return "Wake-Up Alarm, \(Self.weekdayText(weekdays))"
         case .cycle:
