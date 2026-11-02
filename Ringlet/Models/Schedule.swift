@@ -185,6 +185,13 @@ extension ScheduleRule {
         return order.map { names[$0 - 1] }.joined(separator: ", ")
     }
 
+    /// For example "Tue, 3 Nov", with the year added when it isn't this year.
+    static func dateText(_ date: Date) -> String {
+        let style = Date.FormatStyle.dateTime.weekday(.abbreviated).month(.abbreviated).day()
+        let isThisYear = Calendar.current.isDate(date, equalTo: .now, toGranularity: .year)
+        return date.formatted(isThisYear ? style : style.year())
+    }
+
     static func timeText(_ minute: Int) -> String {
         let date = Calendar.current.date(byAdding: .minute, value: minute, to: Calendar.current.startOfDay(for: .now)) ?? .now
         return date.formatted(date: .omitted, time: .shortened)
@@ -227,7 +234,7 @@ extension ScheduleRule {
         }
         let list = minutes.map(Self.timeText).joined(separator: ", ")
         if kind == .oneTime {
-            return "\(start.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())), \(list)"
+            return "\(Self.dateText(start)), \(list)"
         }
         return list
     }

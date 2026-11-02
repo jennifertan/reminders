@@ -132,7 +132,7 @@ struct ReminderListView: View {
             return on.isEmpty ? [] : [("", on.sorted { $0.createdAt > $1.createdAt })]
         case .type:
             return Self.typeOrder.compactMap { kind in
-                let matching = on.filter { $0.kind == kind }
+                let matching = bySoonest(on.filter { $0.kind == kind })
                 return matching.isEmpty ? nil : (kind.title, matching)
             }
         }
@@ -144,16 +144,33 @@ struct ReminderListView: View {
         case .time: return off
         case .dateAdded: return off.sorted { $0.createdAt > $1.createdAt }
         case .type:
-            return off.sorted {
-                (Self.typeOrder.firstIndex(of: $0.kind) ?? 0, firstMinute($0))
-                    < (Self.typeOrder.firstIndex(of: $1.kind) ?? 0, firstMinute($1))
-            }
+            return Self.typeOrder.flatMap { kind in bySoonest(off.filter { $0.kind == kind }) }
         }
     }
 
     private static let typeOrder: [ReminderKind] = [.oneTime, .yearly, .monthly, .weekly, .daily, .wakeUp, .cycle]
 
     private func firstMinute(_ reminder: Reminder) -> Int { reminder.rule.minutes.first ?? 0 }
+
+    private func bySoonest(_ reminders: [Reminder]) -> [Reminder] {
+        reminders.map { ($0, nextRing($0)) }.sorted { $0.1 < $1.1 }.map(\.0)
+    }
+
+    /// When it next rings from today on, or its last day for a one-time reminder that has passed.
+    private func nextRing(_ reminder: Reminder) -> Date {
+        let calendar = Calendar.current
+        let rule = reminder.rule
+        let today = calendar.startOfDay(for: .now)
+        let from = rule.kind == .oneTime ? calendar.startOfDay(for: rule.start) : max(today, calendar.startOfDay(for: rule.start))
+        // Long enough for a rule that repeats every few years.
+        for offset in 0..<(366 * max(1, rule.interval) + 7) {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: from) else { break }
+            if rule.occurs(on: day) {
+                return day.addingTimeInterval(Double(firstMinute(reminder)) * 60)
+            }
+        }
+        return .distantFuture
+    }
 
     private var isShowingActions: Binding<Bool> {
         Binding(get: { selected != nil }, set: { if !$0 { selected = nil } })
