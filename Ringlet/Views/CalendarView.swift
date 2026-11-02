@@ -9,14 +9,16 @@ struct CalendarView: View {
     @State private var selected = Calendar.current.startOfDay(for: .now)
     @State private var isAdding = false
     @State private var isShowingSettings = false
+    /// Comma-separated kinds the calendar leaves out.
+    @AppStorage("calendarHiddenKinds") private var hiddenKindsRaw = ""
 
     var body: some View {
         List {
             Section {
-                MonthGrid(month: $month, selected: $selected, reminders: reminders, marks: Planner.marksByKey(marks))
+                MonthGrid(month: $month, selected: $selected, reminders: shownReminders, marks: Planner.marksByKey(marks))
                     .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 12, trailing: 8))
             }
-            OccurrenceList(day: selected)
+            OccurrenceList(day: selected, hiddenKinds: hiddenKinds)
         }
         .ringletBackground()
         .navigationTitle("Calendar")
@@ -26,11 +28,45 @@ struct CalendarView: View {
                 Button { isShowingSettings = true } label: { Label("Settings", systemImage: "gearshape") }
             }
             ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Section("Show in Calendar") {
+                        ForEach(ReminderKind.allCases) { kind in
+                            Toggle(kind.title, isOn: shows(kind))
+                        }
+                    }
+                    Button("One-Time Only") {
+                        hiddenKinds = Set(ReminderKind.allCases.filter { $0 != .oneTime })
+                    }
+                    Button("Show Everything") { hiddenKinds = [] }
+                } label: {
+                    Label("Filter", systemImage: hiddenKinds.isEmpty
+                          ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
                 AddButton { isAdding = true }
             }
         }
         .sheet(isPresented: $isAdding) { TypePickerView(startDay: selected) }
         .sheet(isPresented: $isShowingSettings) { SettingsView() }
+    }
+
+    private var hiddenKinds: Set<ReminderKind> {
+        get { Set(hiddenKindsRaw.split(separator: ",").compactMap { ReminderKind(rawValue: String($0)) }) }
+        nonmutating set { hiddenKindsRaw = newValue.map(\.rawValue).sorted().joined(separator: ",") }
+    }
+
+    private var shownReminders: [Reminder] {
+        reminders.filter { !hiddenKinds.contains($0.kind) }
+    }
+
+    private func shows(_ kind: ReminderKind) -> Binding<Bool> {
+        Binding(
+            get: { !hiddenKinds.contains(kind) },
+            set: { isShown in
+                if isShown { hiddenKinds.remove(kind) } else { hiddenKinds.insert(kind) }
+            }
+        )
     }
 }
 

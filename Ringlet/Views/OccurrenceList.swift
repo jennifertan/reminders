@@ -82,6 +82,8 @@ struct StatusButton: View {
 /// see the picture, edit and delete.
 struct OccurrenceList: View {
     let day: Date
+    /// Kinds of reminder to leave out, for the Calendar's filter.
+    var hiddenKinds: Set<ReminderKind> = []
 
     @Environment(\.modelContext) private var modelContext
     @Query private var reminders: [Reminder]
@@ -98,7 +100,8 @@ struct OccurrenceList: View {
 
     var body: some View {
         let markMap = Planner.marksByKey(marks)
-        let occurrences = Planner.occurrences(on: day, reminders: reminders, marks: markMap)
+        let shown = reminders.filter { !hiddenKinds.contains($0.kind) }
+        let occurrences = Planner.occurrences(on: day, reminders: shown, marks: markMap)
 
         Group {
             if occurrences.isEmpty {
