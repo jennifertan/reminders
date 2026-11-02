@@ -156,16 +156,21 @@ struct ReminderListView: View {
 
     private func firstMinute(_ reminder: Reminder) -> Int { reminder.rule.minutes.first ?? 0 }
 
+    /// Soonest next ring first. Reminders that won't ring again, such as a one-time reminder
+    /// that has passed, go last, most recent first.
     private func bySoonest(_ reminders: [Reminder]) -> [Reminder] {
-        reminders.map { ($0, nextRing($0)) }.sorted { $0.1 < $1.1 }.map(\.0)
+        let keyed = reminders.map { ($0, nextRing($0)) }
+        let upcoming = keyed.compactMap { item in item.1.map { (item.0, $0) } }.sorted { $0.1 < $1.1 }.map(\.0)
+        let none = keyed.filter { $0.1 == nil }.map(\.0).sorted { $0.start > $1.start }
+        return upcoming + none
     }
 
-    /// When it next rings from today on, or its last day for a one-time reminder that has passed.
-    private func nextRing(_ reminder: Reminder) -> Date {
+    /// When it next rings from today on, or nil if it won't ring again.
+    private func nextRing(_ reminder: Reminder) -> Date? {
         let calendar = Calendar.current
         let rule = reminder.rule
         let today = calendar.startOfDay(for: .now)
-        let from = rule.kind == .oneTime ? calendar.startOfDay(for: rule.start) : max(today, calendar.startOfDay(for: rule.start))
+        let from = max(today, calendar.startOfDay(for: rule.start))
         // Long enough for a rule that repeats every few years.
         for offset in 0..<(366 * max(1, rule.interval) + 7) {
             guard let day = calendar.date(byAdding: .day, value: offset, to: from) else { break }
@@ -173,7 +178,7 @@ struct ReminderListView: View {
                 return day.addingTimeInterval(Double(firstMinute(reminder)) * 60)
             }
         }
-        return .distantFuture
+        return nil
     }
 
     private var isShowingActions: Binding<Bool> {
