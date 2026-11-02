@@ -128,7 +128,7 @@ struct ReminderListView: View {
         let on = filtered.filter(\.isEnabled)
         switch sort {
         case .date:
-            return on.isEmpty ? [] : [("", bySoonest(on))]
+            return on.isEmpty ? [] : [("", byDate(on))]
         case .time:
             return on.isEmpty ? [] : [("", on)]
         case .dateAdded:
@@ -144,7 +144,7 @@ struct ReminderListView: View {
     private var turnedOff: [Reminder] {
         let off = filtered.filter { !$0.isEnabled }
         switch sort {
-        case .date: return bySoonest(off)
+        case .date: return byDate(off)
         case .time: return off
         case .dateAdded: return off.sorted { $0.createdAt > $1.createdAt }
         case .type:
@@ -155,6 +155,14 @@ struct ReminderListView: View {
     private static let typeOrder: [ReminderKind] = [.oneTime, .yearly, .monthly, .weekly, .daily, .wakeUp, .cycle]
 
     private func firstMinute(_ reminder: Reminder) -> Int { reminder.rule.minutes.first ?? 0 }
+
+    /// Dated reminders soonest first, then the ones that ring every day, which have no date
+    /// worth sorting on.
+    private func byDate(_ reminders: [Reminder]) -> [Reminder] {
+        let everyDay: Set<ReminderKind> = [.daily, .wakeUp]
+        return bySoonest(reminders.filter { !everyDay.contains($0.kind) })
+            + reminders.filter { everyDay.contains($0.kind) }.sorted { firstMinute($0) < firstMinute($1) }
+    }
 
     /// Soonest next ring first. Reminders that won't ring again, such as a one-time reminder
     /// that has passed, go last, most recent first.
