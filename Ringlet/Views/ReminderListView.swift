@@ -1,6 +1,21 @@
 import SwiftData
 import SwiftUI
 
+/// How the Reminders tab orders reminders. Turned-off reminders always come last.
+enum ReminderSort: String, CaseIterable, Identifiable {
+    case time, type, dateAdded
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .time: "Time"
+        case .type: "Type"
+        case .dateAdded: "Date Added"
+        }
+    }
+}
+
 /// Every reminder, with search and an on/off switch for each.
 struct ReminderListView: View {
     @Environment(\.modelContext) private var modelContext
@@ -13,6 +28,8 @@ struct ReminderListView: View {
     @State private var deleting: Reminder?
     @State private var isAdding = false
     @State private var isShowingSettings = false
+    @AppStorage("reminderSort") private var sort = ReminderSort.time
+    @AppStorage("showsTurnedOff") private var showsTurnedOff = true
 
     var body: some View {
         List {
@@ -27,11 +44,36 @@ struct ReminderListView: View {
                 ContentUnavailableView.search(text: search)
                     .listRowBackground(Color.clear)
             } else {
-                ForEach(filtered) { reminder in
-                    ReminderRow(reminder: reminder) { selected = reminder }
+                ForEach(groups, id: \.title) { group in
+                    Section {
+                        ForEach(group.reminders) { reminder in
+                            ReminderRow(reminder: reminder) { selected = reminder }
+                        }
+                    } header: {
+                        if !group.title.isEmpty { Text(group.title) }
+                    }
+                }
+                if !turnedOff.isEmpty {
+                    Section {
+                        if showsTurnedOff {
+                            ForEach(turnedOff) { reminder in
+                                ReminderRow(reminder: reminder) { selected = reminder }
+                            }
+                        }
+                    } header: {
+                        Text("Turned Off (\(turnedOff.count))")
+                    } footer: {
+                        if !showsTurnedOff {
+                            Button("Show Turned-Off Reminders") { showsTurnedOff = true }
+                                .font(.footnote)
+                        }
+                    }
                 }
             }
         }
+        .animation(.default, value: reminders.map(\.isEnabled))
+        .animation(.default, value: sort)
+        .animation(.default, value: showsTurnedOff)
         .ringletBackground()
         .searchable(text: $search, prompt: "Search messages and notes")
         .navigationTitle("Reminders")
@@ -39,6 +81,16 @@ struct ReminderListView: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button { isShowingSettings = true } label: { Label("Settings", systemImage: "gearshape") }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Picker("Sort By", selection: $sort) {
+                        ForEach(ReminderSort.allCases) { Text($0.title).tag($0) }
+                    }
+                    Toggle("Show Turned-Off", isOn: $showsTurnedOff)
+                } label: {
+                    Label("Sort and Filter", systemImage: "arrow.up.arrow.down")
+                }
             }
             ToolbarItem(placement: .topBarTrailing) {
                 AddButton { isAdding = true }
@@ -67,8 +119,41 @@ struct ReminderListView: View {
         let matching = query.isEmpty ? reminders : reminders.filter {
             $0.message.localizedCaseInsensitiveContains(query) || $0.notes.localizedCaseInsensitiveContains(query)
         }
-        return matching.sorted { ($0.rule.minutes.first ?? 0) < ($1.rule.minutes.first ?? 0) }
+        return matching.sorted { firstMinute($0) < firstMinute($1) }
     }
+
+    /// The reminders that are switched on, in sections when sorting by type.
+    private var groups: [(title: String, reminders: [Reminder])] {
+        let on = filtered.filter(\.isEnabled)
+        switch sort {
+        case .time:
+            return on.isEmpty ? [] : [("", on)]
+        case .dateAdded:
+            return on.isEmpty ? [] : [("", on.sorted { $0.createdAt > $1.createdAt })]
+        case .type:
+            return Self.typeOrder.compactMap { kind in
+                let matching = on.filter { $0.kind == kind }
+                return matching.isEmpty ? nil : (kind.title, matching)
+            }
+        }
+    }
+
+    private var turnedOff: [Reminder] {
+        let off = filtered.filter { !$0.isEnabled }
+        switch sort {
+        case .time: return off
+        case .dateAdded: return off.sorted { $0.createdAt > $1.createdAt }
+        case .type:
+            return off.sorted {
+                (Self.typeOrder.firstIndex(of: $0.kind) ?? 0, firstMinute($0))
+                    < (Self.typeOrder.firstIndex(of: $1.kind) ?? 0, firstMinute($1))
+            }
+        }
+    }
+
+    private static let typeOrder: [ReminderKind] = [.oneTime, .yearly, .monthly, .weekly, .daily, .wakeUp, .cycle]
+
+    private func firstMinute(_ reminder: Reminder) -> Int { reminder.rule.minutes.first ?? 0 }
 
     private var isShowingActions: Binding<Bool> {
         Binding(get: { selected != nil }, set: { if !$0 { selected = nil } })
