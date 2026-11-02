@@ -373,10 +373,7 @@ struct ReminderFormView: View {
 
     private var alertSection: some View {
         Section {
-            Picker("Pre-Alarm", selection: $draft.preAlarmMinutes) {
-                Text("Off").tag(0)
-                ForEach([5, 10, 15, 20, 30, 60, 120, 1440], id: \.self) { Text("\(Self.duration($0)) before").tag($0) }
-            }
+            LeadTimePicker(minutes: $draft.preAlarmMinutes)
             Picker("Auto-Snooze", selection: $draft.autoSnoozeMinutes) {
                 Text("Off").tag(0)
                 ForEach([5, 9, 10, 15, 30], id: \.self) { Text("Every \($0) min").tag($0) }
@@ -406,12 +403,6 @@ struct ReminderFormView: View {
     }
 
     // MARK: Helpers
-
-    static func duration(_ minutes: Int) -> String {
-        if minutes >= 1440 { return minutes == 1440 ? "1 day" : "\(minutes / 1440) days" }
-        if minutes >= 60 { return minutes == 60 ? "1 hour" : "\(minutes / 60) hours" }
-        return "\(minutes) min"
-    }
 
     private func timeBinding(_ index: Int) -> Binding<Date> {
         Binding(
@@ -518,5 +509,75 @@ struct MonthDayChips: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
+    }
+}
+
+/// Pre-alarm lead time as a number and a unit, picked on two wheels. "-" turns it off.
+private struct LeadTimePicker: View {
+    @Binding var minutes: Int
+    @State private var isExpanded = false
+    /// The unit picked on the wheel, so 60 minutes stays "60 Minutes" instead of jumping to "1 Hour".
+    @State private var pickedUnit: Unit?
+
+    private enum Unit: Int, CaseIterable, Identifiable {
+        case minute = 1, hour = 60, day = 1440, week = 10080
+
+        var id: Self { self }
+
+        func name(_ count: Int) -> String {
+            let word = switch self {
+            case .minute: "Minute"
+            case .hour: "Hour"
+            case .day: "Day"
+            case .week: "Week"
+            }
+            return count == 1 ? word : word + "s"
+        }
+    }
+
+    var body: some View {
+        Button {
+            withAnimation { isExpanded.toggle() }
+        } label: {
+            LabeledContent("Pre-Alarm") {
+                Text(minutes == 0 ? "Off" : "\(count) \(unit.name(count)) before")
+                    .foregroundStyle(isExpanded ? Color.accentColor : Color.secondary)
+            }
+        }
+        .tint(.primary)
+
+        if isExpanded {
+            HStack(spacing: 0) {
+                Picker("Number", selection: countBinding) {
+                    Text("-").tag(0)
+                    ForEach(1...60, id: \.self) { Text("\($0)").tag($0) }
+                }
+                Picker("Unit", selection: unitBinding) {
+                    ForEach(Unit.allCases) { Text($0.name(max(count, 1))).tag($0) }
+                }
+            }
+            .pickerStyle(.wheel)
+            .labelsHidden()
+            .frame(height: 160)
+        }
+    }
+
+    /// The picked unit, or else the largest unit that divides the minutes exactly.
+    private var unit: Unit {
+        if let pickedUnit, minutes % pickedUnit.rawValue == 0 { return pickedUnit }
+        return Unit.allCases.reversed().first { minutes > 0 && minutes % $0.rawValue == 0 } ?? .minute
+    }
+
+    private var count: Int { minutes / unit.rawValue }
+
+    private var countBinding: Binding<Int> {
+        Binding(get: { count }, set: { minutes = $0 * unit.rawValue })
+    }
+
+    private var unitBinding: Binding<Unit> {
+        Binding(get: { unit }, set: {
+            minutes = max(count, 1) * $0.rawValue
+            pickedUnit = $0
+        })
     }
 }

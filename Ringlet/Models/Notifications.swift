@@ -76,7 +76,9 @@ enum NotificationScheduler {
 
         var rings: [(date: Date, occurrence: Occurrence, event: AlarmEvent, number: Int)] = []
         // Start with yesterday so auto-snoozes that run past midnight still ring.
-        for offset in -1..<daysAhead {
+        // Look far enough ahead that a pre-alarm weeks before its ring still gets queued.
+        let leadDays = (reminders.map(\.preAlarmMinutes).max() ?? 0) / 1440 + 1
+        for offset in -1..<(daysAhead + leadDays) {
             guard let day = calendar.date(byAdding: .day, value: offset, to: today) else { continue }
             for occurrence in Planner.occurrences(on: day, reminders: reminders, marks: marks)
             where marks[occurrence.key]?.isDone != true {
