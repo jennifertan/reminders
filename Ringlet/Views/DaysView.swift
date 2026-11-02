@@ -7,6 +7,7 @@ struct DaysView: View {
     @State private var isAdding = false
     @State private var isShowingSettings = false
     @State private var isShowingHelp = false
+    @State private var isShowingHistory = false
 
     var body: some View {
         List {
@@ -25,8 +26,9 @@ struct DaysView: View {
         .navigationTitle("Days")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
+            ToolbarItemGroup(placement: .topBarLeading) {
                 Button { isShowingSettings = true } label: { Label("Settings", systemImage: "gearshape") }
+                Button { isShowingHistory = true } label: { Label("Done History", systemImage: "clock.arrow.circlepath") }
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button { isShowingHelp = true } label: { Label("Help", systemImage: "questionmark.circle") }
@@ -36,6 +38,7 @@ struct DaysView: View {
         .sheet(isPresented: $isAdding) { TypePickerView(startDay: router.day) }
         .sheet(isPresented: $isShowingSettings) { SettingsView() }
         .sheet(isPresented: $isShowingHelp) { HelpView() }
+        .sheet(isPresented: $isShowingHistory) { HistoryView() }
     }
 
     private func step(_ days: Int) {

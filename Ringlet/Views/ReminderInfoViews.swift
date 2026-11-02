@@ -132,3 +132,85 @@ struct RescheduleView: View {
         dismiss()
     }
 }
+
+/// Every ring that was marked done, newest first, grouped by day.
+struct HistoryView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Query private var reminders: [Reminder]
+    @Query(filter: #Predicate<OccurrenceMark> { $0.isDone }) private var marks: [OccurrenceMark]
+    @State private var search = ""
+
+    private struct Entry: Identifiable {
+        let id: String
+        let reminder: Reminder
+        let date: Date
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if entries.isEmpty {
+                    ContentUnavailableView {
+                        Label("Nothing Done Yet", systemImage: "checkmark.circle")
+                    } description: {
+                        Text("Reminders you mark as done show up here.")
+                    }
+                    .listRowBackground(Color.clear)
+                } else if filtered.isEmpty {
+                    ContentUnavailableView.search(text: search)
+                        .listRowBackground(Color.clear)
+                } else {
+                    ForEach(days, id: \.self) { day in
+                        Section(day.formatted(.dateTime.weekday(.wide).day().month(.wide).year())) {
+                            ForEach(filtered.filter { Calendar.current.isDate($0.date, inSameDayAs: day) }) { entry in
+                                HStack(spacing: 14) {
+                                    ReminderImage(entry.reminder)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(entry.reminder.message).font(.headline)
+                                        Text(entry.date, style: .time)
+                                            .font(.subheadline)
+                                            .monospacedDigit()
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer(minLength: 0)
+                                    Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
+                                }
+                                .padding(.vertical, 2)
+                            }
+                        }
+                    }
+                }
+            }
+            .ringletBackground()
+            .searchable(text: $search, prompt: "Search done reminders")
+            .navigationTitle("Done History")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+        }
+    }
+
+    private var entries: [Entry] {
+        let byID = Dictionary(reminders.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return marks.compactMap { mark in
+            guard let parsed = Planner.parse(mark.key), let reminder = byID[parsed.reminderID] else { return nil }
+            return Entry(id: mark.key, reminder: reminder, date: mark.movedTo ?? parsed.date)
+        }
+        .sorted { $0.date > $1.date }
+    }
+
+    private var filtered: [Entry] {
+        let query = search.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return entries }
+        return entries.filter {
+            $0.reminder.message.localizedCaseInsensitiveContains(query)
+                || $0.reminder.notes.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    private var days: [Date] {
+        var seen = Set<Date>()
+        return filtered.map { Calendar.current.startOfDay(for: $0.date) }.filter { seen.insert($0).inserted }
+    }
+}
