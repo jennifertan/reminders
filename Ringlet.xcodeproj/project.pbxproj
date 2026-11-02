@@ -172,6 +172,7 @@
 				B30000000000000000000001 /* Sources */,
 				B30000000000000000000002 /* Frameworks */,
 				B30000000000000000000003 /* Resources */,
+				B300000000000000000000A1 /* Copy Alarmed Records */,
 			);
 			buildRules = (
 			);
@@ -231,6 +232,31 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		B300000000000000000000A1 /* Copy Alarmed Records */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/Config/Alarmed/alarmed-done-history.json",
+				"$(SRCROOT)/Config/Alarmed/alarmed-active.json",
+			);
+			name = "Copy Alarmed Records";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/alarmed-done-history.json",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/alarmed-active.json",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Tommy's Alarmed records are personal, so they live in the gitignored Config/Alarmed\n# folder and are copied into the app only when present. RingletApp loads them once.\nfor name in alarmed-done-history.json alarmed-active.json; do\n  if [ -f \"$SRCROOT/Config/Alarmed/$name\" ]; then\n    cp \"$SRCROOT/Config/Alarmed/$name\" \"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/$name\"\n  fi\ndone\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		B30000000000000000000001 /* Sources */ = {

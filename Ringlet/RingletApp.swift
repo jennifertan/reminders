@@ -28,6 +28,7 @@ struct RingletApp: App {
             Reminder.makeSamples().forEach(context.insert)
         }
         #endif
+        AlarmedImport.loadBundledRecordsOnce(into: Store.container.mainContext)
         Theme.applyBarAppearance()
     }
 

@@ -327,12 +327,19 @@ enum AlarmedImport {
 }
 
 extension AlarmedImport {
-    static func message(for result: Result) -> String {
-        switch result {
-        case .history(let added):
-            added == 0 ? "Everything in that file is already in Done History." : "Added \(added) done items to Done History."
-        case .reminders(let added):
-            added == 0 ? "Those reminders are already here." : "Added \(added) reminders. They're switched on and will ring."
+    /// Loads the Alarmed records bundled with the app, once. Later builds without the files,
+    /// or reminders deleted after loading, are left alone.
+    static func loadBundledRecordsOnce(into context: ModelContext) {
+        let key = "loadedAlarmedRecords"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        var loadedAny = false
+        for name in ["alarmed-done-history", "alarmed-active"] {
+            guard let url = Bundle.main.url(forResource: name, withExtension: "json"),
+                  let data = try? Data(contentsOf: url),
+                  (try? run(data: data, into: context)) != nil
+            else { continue }
+            loadedAny = true
         }
+        if loadedAny { UserDefaults.standard.set(true, forKey: key) }
     }
 }

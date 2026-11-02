@@ -133,16 +133,13 @@ struct RescheduleView: View {
     }
 }
 
-/// Every ring that was marked done, newest first, grouped by day, plus done items imported from Alarmed.
+/// Every ring that was marked done, newest first, grouped by day, plus done items brought over from Alarmed.
 struct HistoryView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
     @Query private var reminders: [Reminder]
     @Query(filter: #Predicate<OccurrenceMark> { $0.isDone }) private var marks: [OccurrenceMark]
     @Query private var archived: [ArchivedDone]
     @State private var search = ""
-    @State private var isImporting = false
-    @State private var importResult: String?
 
     private struct Entry: Identifiable {
         let id: String
@@ -160,7 +157,7 @@ struct HistoryView: View {
                     ContentUnavailableView {
                         Label("Nothing Done Yet", systemImage: "checkmark.circle")
                     } description: {
-                        Text("Reminders you mark as done show up here. Tap Import to bring in done items from Alarmed.")
+                        Text("Reminders you mark as done show up here.")
                     }
                     .listRowBackground(Color.clear)
                 } else if filtered.isEmpty {
@@ -181,18 +178,7 @@ struct HistoryView: View {
             .navigationTitle("Done History")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Import") { isImporting = true }
-                }
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
-            }
-            .fileImporter(isPresented: $isImporting, allowedContentTypes: [.json]) { result in
-                importFile(result)
-            }
-            .alert("Import", isPresented: Binding(get: { importResult != nil }, set: { if !$0 { importResult = nil } })) {
-                Button("OK") {}
-            } message: {
-                Text(importResult ?? "")
             }
         }
     }
@@ -255,18 +241,5 @@ struct HistoryView: View {
         Dictionary(grouping: filtered) { Calendar.current.startOfDay(for: $0.date) }
             .sorted { $0.key > $1.key }
             .map { ($0.key, $0.value) }
-    }
-
-    private func importFile(_ result: Result<URL, Error>) {
-        do {
-            let url = try result.get()
-            let isScoped = url.startAccessingSecurityScopedResource()
-            defer { if isScoped { url.stopAccessingSecurityScopedResource() } }
-            importResult = try AlarmedImport.message(
-                for: AlarmedImport.run(data: try Data(contentsOf: url), into: modelContext))
-            Task { await NotificationScheduler.reschedule(context: modelContext) }
-        } catch {
-            importResult = "Couldn't read that file. Pick one of the Alarmed exports (.json)."
-        }
     }
 }

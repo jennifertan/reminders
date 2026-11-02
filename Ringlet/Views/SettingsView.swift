@@ -11,8 +11,6 @@ struct SettingsView: View {
     @State private var status = UNAuthorizationStatus.notDetermined
     @State private var queued = 0
     @State private var isConfirmingDeleteAll = false
-    @State private var isImporting = false
-    @State private var importResult: String?
 
     var body: some View {
         NavigationStack {
@@ -72,12 +70,6 @@ struct SettingsView: View {
                     Text("Examples include medication, water, a wake-up alarm and a monthly bill so you can see every kind of schedule.")
                 }
 
-                Section {
-                    Button("Import from Alarmed") { isImporting = true }
-                } footer: {
-                    Text("Pick an Alarmed export. Active reminders become Ringlet reminders, and done items go to Done History. Importing the same file again doesn't add duplicates.")
-                }
-
                 Section("About") {
                     LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")
                 }
@@ -98,32 +90,8 @@ struct SettingsView: View {
             } message: {
                 Text("This removes every reminder and its history. You can't undo it.")
             }
-            .fileImporter(isPresented: $isImporting, allowedContentTypes: [.json]) { result in
-                importFile(result)
-            }
-            .alert("Import", isPresented: Binding(get: { importResult != nil }, set: { if !$0 { importResult = nil } })) {
-                Button("OK") {}
-            } message: {
-                Text(importResult ?? "")
-            }
             .task { await refresh() }
             .onDisappear { SoundPlayer.shared.stop() }
-        }
-    }
-
-    private func importFile(_ result: Result<URL, Error>) {
-        do {
-            let url = try result.get()
-            let isScoped = url.startAccessingSecurityScopedResource()
-            defer { if isScoped { url.stopAccessingSecurityScopedResource() } }
-            importResult = try AlarmedImport.message(
-                for: AlarmedImport.run(data: try Data(contentsOf: url), into: modelContext))
-            Task {
-                await NotificationScheduler.reschedule(context: modelContext)
-                await refresh()
-            }
-        } catch {
-            importResult = "Couldn't read that file. Pick one of the Alarmed exports (.json)."
         }
     }
 
