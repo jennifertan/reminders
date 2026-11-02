@@ -70,6 +70,7 @@ enum ReminderSymbols {
         ("dollarsign.circle.fill", 0.38), ("bell.fill", 0.48), ("dumbbell.fill", 0.03), ("leaf.fill", 0.3),
         ("cart.fill", 0.8), ("book.fill", 0.66), ("car.fill", 0.58), ("house.fill", 0.18),
         ("fork.knife", 0.05), ("graduationcap.fill", 0.68), ("heart.fill", 0.95), ("bed.double.fill", 0.7),
+        ("stroller.fill", 0.88), ("teddybear.fill", 0.1),
     ]
 
     static let all: [SymbolOption] = raw.map { SymbolOption(symbol: $0.0, hue: $0.1) }
