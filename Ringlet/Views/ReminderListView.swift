@@ -99,9 +99,9 @@ struct ReminderListView: View {
         }
         .confirmationDialog(selected?.message ?? "", isPresented: isShowingActions, titleVisibility: .visible,
                             presenting: selected) { reminder in
-            Button("View Message and Notes") { readingNotes = reminder }
-            Button("View Image") { viewingImage = reminder }
-            Button("Edit Reminder") { editing = reminder }
+            Button("View Message and Notes") { afterDialog { readingNotes = reminder } }
+            Button("View Image") { afterDialog { viewingImage = reminder } }
+            Button("Edit Reminder") { afterDialog { editing = reminder } }
             Button("Test the Alarm") { testAlarm(reminder) }
             Button("Delete Reminder", role: .destructive) { deleting = reminder }
         } message: { reminder in

@@ -233,17 +233,21 @@ struct HistoryView: View {
         .padding(.vertical, 2)
     }
 
+    private static let hiddenKinds: Set<ReminderKind> = [.daily, .weekly]
+
     private var entries: [Entry] {
         let byID = Dictionary(reminders.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let fromMarks: [Entry] = marks.compactMap { mark in
             guard let parsed = Planner.parse(mark.key), let reminder = byID[parsed.reminderID],
-                  reminder.kind != .daily
+                  !Self.hiddenKinds.contains(reminder.kind)
             else { return nil }
             return Entry(id: mark.key, title: reminder.message, notes: "", date: mark.movedTo ?? parsed.date,
                          detail: reminder.rule.summary, reminder: reminder)
         }
-        // Daily items like "Take tablets" would crowd out everything else.
-        let fromArchive = archived.filter { !$0.repeatSummary.hasSuffix(" day") && !$0.repeatSummary.hasSuffix(" days") }.map { item in
+        // Daily and weekly items like "Take tablets" would crowd out everything else.
+        let fromArchive = archived.filter { item in
+            !["day", "days", "week", "weeks"].contains { item.repeatSummary.hasSuffix(" " + $0) }
+        }.map { item in
             Entry(id: item.sourceID, title: item.title, notes: item.notes, date: item.completedAt,
                   detail: ([item.source] + (item.repeatSummary.isEmpty ? [] : [item.repeatSummary])).joined(separator: " · "),
                   reminder: nil)

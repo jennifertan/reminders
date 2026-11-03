@@ -18,7 +18,7 @@ struct CalendarView: View {
                 MonthGrid(month: $month, selected: $selected, reminders: shownReminders, marks: Planner.marksByKey(marks))
                     .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 12, trailing: 8))
             }
-            OccurrenceList(day: selected, hiddenKinds: hiddenKinds)
+            OccurrenceList(day: selected, hiddenKinds: hiddenKinds, isCalendar: true)
         }
         .ringletBackground()
         .navigationTitle("Calendar")
@@ -57,7 +57,7 @@ struct CalendarView: View {
     }
 
     private var shownReminders: [Reminder] {
-        reminders.filter { !hiddenKinds.contains($0.kind) }
+        reminders.filter { $0.showsInCalendar && !hiddenKinds.contains($0.kind) }
     }
 
     private func shows(_ kind: ReminderKind) -> Binding<Bool> {

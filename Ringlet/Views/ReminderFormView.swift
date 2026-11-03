@@ -17,6 +17,7 @@ struct ReminderDraft {
     var snoozeMinutes: Int
     var isCritical: Bool
     var criticalVolume: Double
+    var showsInCalendar = true
 
     /// Starting values for a new reminder of a kind.
     init(kind: ReminderKind, start: Date) {
@@ -53,6 +54,7 @@ struct ReminderDraft {
         snoozeMinutes = reminder.snoozeMinutes
         isCritical = reminder.isCritical
         criticalVolume = reminder.criticalVolume
+        showsInCalendar = reminder.showsInCalendar
     }
 
     func apply(to reminder: Reminder) {
@@ -69,6 +71,7 @@ struct ReminderDraft {
         reminder.snoozeMinutes = snoozeMinutes
         reminder.isCritical = isCritical
         reminder.criticalVolume = criticalVolume
+        reminder.showsInCalendar = showsInCalendar
     }
 
     /// What needs fixing before it can be saved, or nil when it's ready.
@@ -142,6 +145,11 @@ struct ReminderFormView: View {
             typeSection
             aboutSection
             whenSection
+            Section {
+                Toggle("Show in Calendar", isOn: $draft.showsInCalendar)
+            } footer: {
+                Text("Turn off to keep it out of the Calendar tab. It still rings and shows on the Days tab.")
+            }
             if draft.rule.kind.repeats { endSection }
             alertSection
             pictureSection

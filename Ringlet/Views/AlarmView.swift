@@ -1,7 +1,7 @@
 import SwiftData
 import SwiftUI
 
-/// Full-screen alarm shown when a reminder rings while Ringlet is open. The sound repeats until you act.
+/// Full-screen alarm shown when a reminder rings while Ringlet is open. The sound repeats for a minute or until you act.
 struct AlarmView: View {
     let alarm: RingingAlarm
 

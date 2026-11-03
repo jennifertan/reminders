@@ -16,6 +16,8 @@ final class Reminder {
     var hue = 0.45
     @Attribute(.externalStorage) var photo: Data?
     var isEnabled = true
+    /// Off hides it from the Calendar tab. It still rings and shows on the Days tab.
+    var showsInCalendar = true
     /// The other app's id when this was imported, so importing again doesn't add duplicates.
     var importedID: String?
 

@@ -84,6 +84,8 @@ struct OccurrenceList: View {
     let day: Date
     /// Kinds of reminder to leave out, for the Calendar's filter.
     var hiddenKinds: Set<ReminderKind> = []
+    /// Leaves out reminders switched off for the Calendar.
+    var isCalendar = false
 
     @Environment(\.modelContext) private var modelContext
     @Query private var reminders: [Reminder]
@@ -100,7 +102,7 @@ struct OccurrenceList: View {
 
     var body: some View {
         let markMap = Planner.marksByKey(marks)
-        let shown = reminders.filter { !hiddenKinds.contains($0.kind) }
+        let shown = reminders.filter { !hiddenKinds.contains($0.kind) && (!isCalendar || $0.showsInCalendar) }
         let occurrences = Planner.occurrences(on: day, reminders: shown, marks: markMap)
 
         Group {
@@ -126,10 +128,10 @@ struct OccurrenceList: View {
         .onReceive(clock) { now = $0 }
         .confirmationDialog(selected?.reminder.message ?? "", isPresented: isShowingActions, titleVisibility: .visible,
                             presenting: selected) { occurrence in
-            Button("Reschedule") { rescheduling = occurrence }
-            Button("View Message and Notes") { readingNotes = occurrence.reminder }
-            Button("View Image") { viewingImage = occurrence.reminder }
-            Button("Edit Reminder") { editing = occurrence.reminder }
+            Button("Reschedule") { afterDialog { rescheduling = occurrence } }
+            Button("View Message and Notes") { afterDialog { readingNotes = occurrence.reminder } }
+            Button("View Image") { afterDialog { viewingImage = occurrence.reminder } }
+            Button("Edit Reminder") { afterDialog { editing = occurrence.reminder } }
             Button("Delete Reminder", role: .destructive) { deleting = occurrence.reminder }
         } message: { occurrence in
             Text("\(occurrence.date.formatted(date: .abbreviated, time: .shortened)) · \(occurrence.reminder.rule.summary)")
@@ -239,5 +241,15 @@ private struct DeleteReminderAlert: ViewModifier {
         } message: { _ in
             Text("This removes the reminder and its history. You can't undo it.")
         }
+    }
+}
+
+/// Runs a step that opens a sheet once a confirmation dialog has finished closing. On iOS 27 a
+/// sheet presented while the dialog is still animating away is dropped, so the first tap did nothing.
+@MainActor
+func afterDialog(_ action: @escaping @MainActor () -> Void) {
+    Task { @MainActor in
+        try? await Task.sleep(for: .milliseconds(350))
+        action()
     }
 }
