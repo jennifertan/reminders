@@ -114,6 +114,8 @@ final class Reminder {
         }
     }
 
+    var hasNotes: Bool { !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
     /// True for a one-time reminder whose day has passed.
     var isPast: Bool {
         kind == .oneTime && start < Calendar.current.startOfDay(for: .now)

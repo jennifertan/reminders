@@ -206,7 +206,10 @@ struct ReminderRow: View {
                     ReminderImage(reminder)
                         .opacity(isDimmed ? 0.45 : 1)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(reminder.message).font(.headline)
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text(reminder.message).font(.headline)
+                            if reminder.hasNotes { NoteDot() }
+                        }
                         Text(reminder.rule.timesSummary).font(.subheadline).monospacedDigit()
                         Text(reminder.rule.summary + (reminder.isPast ? " · past" : ""))
                             .font(.footnote)

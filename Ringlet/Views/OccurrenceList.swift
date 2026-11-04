@@ -14,9 +14,12 @@ struct OccurrenceRow: View {
                 HStack(spacing: 14) {
                     ReminderImage(occurrence.reminder)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(occurrence.reminder.message)
-                            .font(.headline)
-                            .foregroundStyle(status == .done || status == .skipped ? Color.secondary : Color.primary)
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text(occurrence.reminder.message)
+                                .font(.headline)
+                                .foregroundStyle(status == .done || status == .skipped ? Color.secondary : Color.primary)
+                            if occurrence.reminder.hasNotes { NoteDot() }
+                        }
                         HStack(spacing: 6) {
                             Text(occurrence.date, style: .time)
                                 .monospacedDigit()
@@ -43,6 +46,17 @@ struct OccurrenceRow: View {
             StatusButton(status: status, action: onToggle)
         }
         .padding(.vertical, 4)
+    }
+}
+
+/// A tiny dot beside a reminder's name when it has a note.
+struct NoteDot: View {
+    var body: some View {
+        Circle()
+            .fill(Color.highlight)
+            .frame(width: 7, height: 7)
+            .alignmentGuide(.firstTextBaseline) { $0[.bottom] + 3 }
+            .accessibilityLabel("Has a note")
     }
 }
 
