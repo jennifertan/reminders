@@ -94,7 +94,7 @@ struct OccurrenceList: View {
     @State private var rescheduling: Occurrence?
     @State private var readingNotes: Reminder?
     @State private var viewingImage: Reminder?
-    @State private var editing: Reminder?
+    @State private var editing: Occurrence?
     @State private var deleting: Reminder?
     @State private var now = Date.now
 
@@ -131,7 +131,7 @@ struct OccurrenceList: View {
             Button("Reschedule") { afterDialog { rescheduling = occurrence } }
             Button("View Message and Notes") { afterDialog { readingNotes = occurrence.reminder } }
             Button("View Image") { afterDialog { viewingImage = occurrence.reminder } }
-            Button("Edit Reminder") { afterDialog { editing = occurrence.reminder } }
+            Button("Edit Reminder") { afterDialog { editing = occurrence } }
             Button("Delete Reminder", role: .destructive) { deleting = occurrence.reminder }
         } message: { occurrence in
             Text("\(occurrence.date.formatted(date: .abbreviated, time: .shortened)) · \(occurrence.reminder.rule.summary)")
@@ -139,7 +139,7 @@ struct OccurrenceList: View {
         .sheet(item: $rescheduling) { RescheduleView(occurrence: $0) }
         .sheet(item: $readingNotes) { NotesView(reminder: $0) }
         .sheet(item: $viewingImage) { ImageView(reminder: $0) }
-        .sheet(item: $editing) { ReminderFormView(reminder: $0) }
+        .sheet(item: $editing) { ReminderFormView(reminder: $0.reminder, occurrence: $0) }
         .deleteReminderAlert($deleting)
     }
 

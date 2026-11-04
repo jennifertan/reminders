@@ -357,7 +357,9 @@ extension OccurrenceMark {
         let calendar = Calendar.current
         for mark in marks {
             guard let moved = mark.movedTo, let parsed = Planner.parse(mark.key),
-                  let reminder = byID[parsed.reminderID], reminder.kind == .oneTime
+                  let reminder = byID[parsed.reminderID], reminder.kind == .oneTime,
+                  // Skips a mark left from when this reminder repeated.
+                  calendar.isDate(parsed.date, inSameDayAs: reminder.start)
             else { continue }
             reminder.start = calendar.startOfDay(for: moved)
             reminder.times = [calendar.component(.hour, from: moved) * 60 + calendar.component(.minute, from: moved)]

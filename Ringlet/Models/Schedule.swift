@@ -250,3 +250,34 @@ extension ScheduleRule {
         }
     }
 }
+
+// MARK: - Moving one ring to an edited schedule
+
+extension ScheduleRule {
+    /// Where one ring of `old` lands if that ring alone takes on this edited schedule:
+    /// the next day from it that fits, at the time that replaces its own.
+    func movedRing(_ date: Date, from old: ScheduleRule, calendar: Calendar = .current) -> Date {
+        let ringDay = calendar.startOfDay(for: date)
+        let minute = calendar.dateComponents([.minute], from: ringDay, to: date).minute ?? 0
+        let newMinutes = minutes
+        var newMinute = minute
+        if !newMinutes.contains(minute) {
+            let index = old.minutes.firstIndex(of: minute) ?? 0
+            newMinute = index < newMinutes.count ? newMinutes[index] : newMinutes.first ?? minute
+        }
+
+        // Interval and end date say which rings exist, not where this one goes.
+        var loose = self
+        loose.interval = 1
+        loose.endMode = .endDate
+        loose.endDate = nil
+        let first = calendar.isDate(start, inSameDayAs: old.start) ? ringDay : max(ringDay, calendar.startOfDay(for: start))
+        // A yearly rule takes its month and day from its start.
+        if kind != .yearly { loose.start = first }
+
+        let day = (0..<800).lazy
+            .compactMap { calendar.date(byAdding: .day, value: $0, to: first) }
+            .first { loose.occurs(on: $0, calendar: calendar) } ?? first
+        return calendar.date(byAdding: .minute, value: newMinute, to: day) ?? day
+    }
+}
