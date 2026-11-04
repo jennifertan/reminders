@@ -1,7 +1,7 @@
 import SwiftData
 import SwiftUI
 
-/// Full-screen alarm shown when a reminder rings while Ringlet is open. The sound repeats for a minute or until you act.
+/// Full-screen alarm shown when a reminder rings while Ringlet is open. The sound plays once, or for up to a minute on a wake-up alarm.
 struct AlarmView: View {
     let alarm: RingingAlarm
 
@@ -26,7 +26,7 @@ struct AlarmView: View {
         .onAppear {
             pulse = true
             if let reminder = occurrence?.reminder {
-                SoundPlayer.shared.play(reminder.sound, repeating: true,
+                SoundPlayer.shared.play(reminder.sound, repeating: reminder.kind == .wakeUp,
                                         volume: reminder.isCritical ? reminder.criticalVolume : 1)
             }
         }
@@ -85,6 +85,17 @@ struct AlarmView: View {
                 }
                 .buttonStyle(.bordered)
                 .tint(.white)
+
+                if reminder.kind.repeats {
+                    Button("Skip") {
+                        let mark = OccurrenceMark.findOrInsert(occurrence.key, in: modelContext)
+                        mark.isSkipped = true
+                        NotificationScheduler.clear(key: occurrence.key)
+                        finish()
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.top, 4)
+                }
 
                 Button("Dismiss") { finish() }
                     .foregroundStyle(.white.opacity(0.7))

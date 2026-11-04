@@ -16,10 +16,15 @@ struct OccurrenceRow: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(occurrence.reminder.message)
                             .font(.headline)
-                            .foregroundStyle(status == .done ? Color.secondary : Color.primary)
+                            .foregroundStyle(status == .done || status == .skipped ? Color.secondary : Color.primary)
                         HStack(spacing: 6) {
                             Text(occurrence.date, style: .time)
                                 .monospacedDigit()
+                            if status == .skipped {
+                                Text("SKIPPED")
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(.secondary)
+                            }
                             if occurrence.isMoved {
                                 Text("MOVED")
                                     .font(.caption2.weight(.bold))
@@ -41,7 +46,7 @@ struct OccurrenceRow: View {
     }
 }
 
-/// The circle at the end of each row: empty, a green tick, or a red cross.
+/// The circle at the end of each row: empty, a green tick, a grey dash, or a red cross.
 struct StatusButton: View {
     let status: OccurrenceStatus
     let action: () -> Void
@@ -53,6 +58,9 @@ struct StatusButton: View {
                 case .done:
                     Circle().fill(Color.accentColor)
                     Image(systemName: "checkmark").font(.system(size: 15, weight: .heavy)).foregroundStyle(.white)
+                case .skipped:
+                    Circle().strokeBorder(Color.secondary.opacity(0.5), lineWidth: 2.5)
+                    Image(systemName: "minus").font(.system(size: 14, weight: .heavy)).foregroundStyle(.secondary)
                 case .missed:
                     Circle().strokeBorder(Color.red, lineWidth: 2.5)
                     Image(systemName: "xmark").font(.system(size: 14, weight: .heavy)).foregroundStyle(.red)
@@ -72,6 +80,7 @@ struct StatusButton: View {
     private var label: String {
         switch status {
         case .done: "Done. Double-tap to undo."
+        case .skipped: "Skipped. Double-tap to undo."
         case .missed: "Missed. Double-tap to mark done."
         case .upcoming: "Mark done"
         }
@@ -126,7 +135,12 @@ struct OccurrenceList: View {
 
     private func toggleDone(_ occurrence: Occurrence) {
         let mark = OccurrenceMark.findOrInsert(occurrence.key, in: modelContext)
-        mark.isDone.toggle()
+        // Tapping a skipped ring undoes the skip rather than marking it done.
+        if mark.isSkipped {
+            mark.isSkipped = false
+        } else {
+            mark.isDone.toggle()
+        }
         if mark.isDone { NotificationScheduler.clear(key: occurrence.key) }
         try? modelContext.save()
         Task { await NotificationScheduler.reschedule(context: modelContext) }
@@ -144,6 +158,9 @@ private struct Tally: View {
             dot(.accentColor, "\(statuses.filter { $0 == .done }.count) done")
             dot(.red, "\(statuses.filter { $0 == .missed }.count) missed")
             dot(.secondary, "\(statuses.filter { $0 == .upcoming }.count) to come")
+            if statuses.contains(.skipped) {
+                dot(.secondary, "\(statuses.filter { $0 == .skipped }.count) skipped")
+            }
         }
         .font(.footnote)
         .textCase(nil)
@@ -241,11 +258,16 @@ extension View {
 
 private struct OccurrenceActionsModifier: ViewModifier {
     @Binding var actions: OccurrenceActions
+    @Environment(\.modelContext) private var modelContext
 
     func body(content: Content) -> some View {
         content
             .confirmationDialog(actions.selected?.reminder.message ?? "", isPresented: isShowingActions,
                                 titleVisibility: .visible, presenting: actions.selected) { occurrence in
+                if occurrence.reminder.kind.repeats {
+                    let isSkipped = OccurrenceMark.find(occurrence.key, in: modelContext)?.isSkipped == true
+                    Button(isSkipped ? "Undo Skip" : "Skip") { setSkipped(!isSkipped, occurrence) }
+                }
                 Button("Reschedule") { afterDialog { actions.rescheduling = occurrence } }
                 Button("View Message and Notes") { afterDialog { actions.readingNotes = occurrence.reminder } }
                 Button("View Image") { afterDialog { actions.viewingImage = occurrence.reminder } }
@@ -263,6 +285,17 @@ private struct OccurrenceActionsModifier: ViewModifier {
 
     private var isShowingActions: Binding<Bool> {
         Binding(get: { actions.selected != nil }, set: { if !$0 { actions.selected = nil } })
+    }
+
+    private func setSkipped(_ isSkipped: Bool, _ occurrence: Occurrence) {
+        let mark = OccurrenceMark.findOrInsert(occurrence.key, in: modelContext)
+        mark.isSkipped = isSkipped
+        if isSkipped {
+            mark.isDone = false
+            NotificationScheduler.clear(key: occurrence.key)
+        }
+        try? modelContext.save()
+        Task { await NotificationScheduler.reschedule(context: modelContext) }
     }
 }
 

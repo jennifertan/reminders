@@ -46,8 +46,8 @@ final class SoundPlayer {
         try? session.setCategory(.playback, mode: .default)
         try? session.setActive(true)
         player = try? AVAudioPlayer(contentsOf: url)
-        // Each sound is 15 seconds, so repeating plays for a minute and then goes quiet.
-        player?.numberOfLoops = repeating ? 3 : 0
+        // Each sound is 5 seconds, so repeating plays for a minute and then goes quiet.
+        player?.numberOfLoops = repeating ? 11 : 0
         player?.volume = Float(volume)
         player?.play()
     }

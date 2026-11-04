@@ -392,14 +392,11 @@ struct ReminderFormView: View {
 
     private var alertSection: some View {
         Section {
-            LeadTimePicker(minutes: $draft.preAlarmMinutes)
-            Picker("Auto-Snooze", selection: $draft.autoSnoozeMinutes) {
-                Text("Off").tag(0)
-                ForEach([5, 9, 10, 15, 30], id: \.self) { Text("Every \($0) min").tag($0) }
-            }
+            IntervalPicker(title: "Pre-Alarm", minutes: $draft.preAlarmMinutes, units: [.minute, .hour, .day, .week]) { "\($0) before" }
+            IntervalPicker(title: "Nag Me", minutes: $draft.autoSnoozeMinutes, units: [.minute, .hour]) { "Every \($0)" }
             if draft.autoSnoozeMinutes > 0 {
                 Stepper("Up to \(draft.autoSnoozeTimes) more time\(draft.autoSnoozeTimes == 1 ? "" : "s")",
-                        value: $draft.autoSnoozeTimes, in: 1...5)
+                        value: $draft.autoSnoozeTimes, in: 1...20)
             }
             Picker("Snooze Button", selection: $draft.snoozeMinutes) {
                 ForEach([5, 9, 10, 15, 30, 60], id: \.self) { Text("\($0) min").tag($0) }
@@ -417,7 +414,7 @@ struct ReminderFormView: View {
         } header: {
             Text("Alerts")
         } footer: {
-            Text("Auto-snooze rings again until you mark the reminder done. A critical alert gets through Focus modes and plays at the volume you set here.")
+            Text("Nag Me keeps ringing at the interval you choose until you mark the reminder done. A critical alert gets through Focus modes and plays at the volume you set here.")
         }
     }
 
@@ -556,14 +553,18 @@ struct MonthDayChips: View {
     }
 }
 
-/// Pre-alarm lead time as a number and a unit, picked on two wheels. "-" turns it off.
-private struct LeadTimePicker: View {
+/// A length of time as a number and a unit, picked on two wheels. "-" turns it off.
+private struct IntervalPicker: View {
+    let title: String
     @Binding var minutes: Int
+    let units: [Unit]
+    /// Wraps the chosen time for the row, for example "Every 2 Hours".
+    let describe: (String) -> String
     @State private var isExpanded = false
     /// The unit picked on the wheel, so 60 minutes stays "60 Minutes" instead of jumping to "1 Hour".
     @State private var pickedUnit: Unit?
 
-    private enum Unit: Int, CaseIterable, Identifiable {
+    enum Unit: Int, Identifiable {
         case minute = 1, hour = 60, day = 1440, week = 10080
 
         var id: Self { self }
@@ -583,8 +584,8 @@ private struct LeadTimePicker: View {
         Button {
             withAnimation { isExpanded.toggle() }
         } label: {
-            LabeledContent("Pre-Alarm") {
-                Text(minutes == 0 ? "Off" : "\(count) \(unit.name(count)) before")
+            LabeledContent(title) {
+                Text(minutes == 0 ? "Off" : describe("\(count) \(unit.name(count))"))
                     .foregroundStyle(isExpanded ? Color.accentColor : Color.secondary)
             }
         }
@@ -597,7 +598,7 @@ private struct LeadTimePicker: View {
                     ForEach(1...60, id: \.self) { Text("\($0)").tag($0) }
                 }
                 Picker("Unit", selection: unitBinding) {
-                    ForEach(Unit.allCases) { Text($0.name(max(count, 1))).tag($0) }
+                    ForEach(units) { Text($0.name(max(count, 1))).tag($0) }
                 }
             }
             .pickerStyle(.wheel)
@@ -609,7 +610,7 @@ private struct LeadTimePicker: View {
     /// The picked unit, or else the largest unit that divides the minutes exactly.
     private var unit: Unit {
         if let pickedUnit, minutes % pickedUnit.rawValue == 0 { return pickedUnit }
-        return Unit.allCases.reversed().first { minutes > 0 && minutes % $0.rawValue == 0 } ?? .minute
+        return units.reversed().first { minutes > 0 && minutes % $0.rawValue == 0 } ?? .minute
     }
 
     private var count: Int { minutes / unit.rawValue }

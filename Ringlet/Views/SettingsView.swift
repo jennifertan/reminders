@@ -119,6 +119,7 @@ struct HelpView: View {
                     row(.done, "Done. Tap the circle to mark a reminder done, and tap again to undo.")
                     row(.missed, "Missed. It's more than 30 minutes past and wasn't marked done.")
                     row(.upcoming, "Still to come, or just due.")
+                    row(.skipped, "Skipped. You chose not to do this one, so it won't ring or count as missed.")
                 }
                 Section("Getting around") {
                     Text("Tap a reminder's name to reschedule just that one, read its notes, see its picture, edit it or delete it.")
@@ -128,7 +129,7 @@ struct HelpView: View {
                 }
                 Section("When it rings") {
                     Text("Use Mark Done or Snooze right on the notification. If Ringlet is open, a full-screen alarm appears and keeps ringing until you choose.")
-                    Text("Auto-snooze rings again a few times until you mark it done. A pre-alarm gives you a heads-up beforehand.")
+                    Text("Nag Me rings again at the interval you choose until you mark it done. A pre-alarm gives you a heads-up beforehand.")
                 }
             }
             .ringletBackground()

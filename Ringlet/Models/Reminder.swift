@@ -125,6 +125,8 @@ final class Reminder {
 final class OccurrenceMark {
     @Attribute(.unique) var key: String
     var isDone = false
+    /// Skipped on purpose: not done, not missed, and it won't ring or nag.
+    var isSkipped = false
     var movedTo: Date?
 
     init(key: String) {

@@ -118,6 +118,7 @@ struct RescheduleView: View {
                             let mark = OccurrenceMark.findOrInsert(occurrence.key, in: modelContext)
                             mark.movedTo = date == original ? nil : date
                             mark.isDone = false
+                            mark.isSkipped = false
                         }
                         finish()
                     }

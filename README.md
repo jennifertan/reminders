@@ -1,7 +1,7 @@
 # Ringlet
 
 A SwiftUI iOS reminders app: a day-by-day checklist of reminders, repeating schedules, a month
-calendar, and alarms with snooze, auto-snooze, pre-alarms and critical alerts.
+calendar, and alarms with snooze, nagging, pre-alarms and critical alerts.
 
 ## Getting started
 

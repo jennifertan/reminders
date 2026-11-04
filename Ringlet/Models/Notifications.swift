@@ -75,13 +75,14 @@ enum NotificationScheduler {
         let now = Date.now
 
         var rings: [(date: Date, occurrence: Occurrence, event: AlarmEvent, number: Int)] = []
-        // Start with yesterday so auto-snoozes that run past midnight still ring.
+        // Start far enough back that nags running on from an earlier day still ring.
+        let nagDays = (reminders.map { $0.autoSnoozeMinutes * $0.autoSnoozeTimes }.max() ?? 0) / 1440 + 1
         // Look far enough ahead that a pre-alarm weeks before its ring still gets queued.
         let leadDays = (reminders.map(\.preAlarmMinutes).max() ?? 0) / 1440 + 1
-        for offset in -1..<(daysAhead + leadDays) {
+        for offset in -nagDays..<(daysAhead + leadDays) {
             guard let day = calendar.date(byAdding: .day, value: offset, to: today) else { continue }
             for occurrence in Planner.occurrences(on: day, reminders: reminders, marks: marks)
-            where marks[occurrence.key]?.isDone != true {
+            where marks[occurrence.key]?.isDone != true && marks[occurrence.key]?.isSkipped != true {
                 let reminder = occurrence.reminder
                 if reminder.preAlarmMinutes > 0 {
                     rings.append((date: occurrence.date.addingTimeInterval(-Double(reminder.preAlarmMinutes) * 60),
@@ -190,7 +191,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             return [.banner, .sound, .list]
         }
         await MainActor.run { AppRouter.shared.showAlarm(key: key, event: event) }
-        // The alarm screen plays the sound itself, on repeat.
+        // The alarm screen plays the sound itself.
         return [.list]
     }
 

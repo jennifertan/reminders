@@ -15,7 +15,7 @@ struct Occurrence: Identifiable, Hashable {
     func hash(into hasher: inout Hasher) { hasher.combine(key) }
 }
 
-enum OccurrenceStatus { case done, missed, upcoming }
+enum OccurrenceStatus { case done, skipped, missed, upcoming }
 
 /// Works out which reminders ring on a day, and whether each ring was done or missed.
 enum Planner {
@@ -110,6 +110,7 @@ enum Planner {
 
     static func status(of occurrence: Occurrence, marks: [String: OccurrenceMark], now: Date = .now) -> OccurrenceStatus {
         if marks[occurrence.key]?.isDone == true { return .done }
+        if marks[occurrence.key]?.isSkipped == true { return .skipped }
         return occurrence.date.addingTimeInterval(missedAfter) < now ? .missed : .upcoming
     }
 }

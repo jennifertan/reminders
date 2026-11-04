@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Makes Ringlet's alarm sounds as 16-bit mono WAV files in Ringlet/Sounds.
 
-Each sound is a short pattern of soft-edged tones repeated for 15 seconds, which is
-under iOS's 30-second limit for notification sounds. The app loops them on the alarm screen.
+Each sound is a short pattern of soft-edged tones repeated for 5 seconds, so a reminder rings
+briefly. A wake-up alarm's alarm screen loops the sound for longer.
 Run from the repo root:  python3 scripts/make-sounds.py
 """
 import math
@@ -11,7 +11,7 @@ import wave
 from pathlib import Path
 
 RATE = 32000
-LENGTH = 15.0
+LENGTH = 5.0
 OUT = Path(__file__).resolve().parent.parent / "Ringlet" / "Sounds"
 
 # name: (wave shape, repeat every N seconds, [(frequency Hz, start s, duration s), ...])
