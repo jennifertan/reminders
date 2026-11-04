@@ -9,6 +9,7 @@ struct CalendarView: View {
     @State private var selected = Calendar.current.startOfDay(for: .now)
     @State private var isAdding = false
     @State private var isShowingSettings = false
+    @State private var actions = OccurrenceActions()
     /// Comma-separated kinds the calendar leaves out.
     @AppStorage("calendarHiddenKinds") private var hiddenKindsRaw = ""
 
@@ -18,8 +19,9 @@ struct CalendarView: View {
                 MonthGrid(month: $month, selected: $selected, reminders: shownReminders, marks: Planner.marksByKey(marks))
                     .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 12, trailing: 8))
             }
-            OccurrenceList(day: selected, hiddenKinds: hiddenKinds, isCalendar: true)
+            OccurrenceList(day: selected, actions: $actions, hiddenKinds: hiddenKinds, isCalendar: true)
         }
+        .occurrenceActions($actions)
         .ringletBackground()
         .navigationTitle("Calendar")
         .navigationBarTitleDisplayMode(.inline)

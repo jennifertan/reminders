@@ -82,6 +82,8 @@ struct StatusButton: View {
 /// see the picture, edit and delete.
 struct OccurrenceList: View {
     let day: Date
+    /// Owned by the screen, which shows them with occurrenceActions on its List.
+    @Binding var actions: OccurrenceActions
     /// Kinds of reminder to leave out, for the Calendar's filter.
     var hiddenKinds: Set<ReminderKind> = []
     /// Leaves out reminders switched off for the Calendar.
@@ -90,12 +92,6 @@ struct OccurrenceList: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var reminders: [Reminder]
     @Query private var marks: [OccurrenceMark]
-    @State private var selected: Occurrence?
-    @State private var rescheduling: Occurrence?
-    @State private var readingNotes: Reminder?
-    @State private var viewingImage: Reminder?
-    @State private var editing: Occurrence?
-    @State private var deleting: Reminder?
     @State private var now = Date.now
 
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
@@ -116,7 +112,7 @@ struct OccurrenceList: View {
                         OccurrenceRow(
                             occurrence: occurrence,
                             status: Planner.status(of: occurrence, marks: markMap, now: now),
-                            onOpen: { selected = occurrence },
+                            onOpen: { actions.selected = occurrence },
                             onToggle: { toggleDone(occurrence) }
                         )
                     }
@@ -126,25 +122,6 @@ struct OccurrenceList: View {
             }
         }
         .onReceive(clock) { now = $0 }
-        .confirmationDialog(selected?.reminder.message ?? "", isPresented: isShowingActions, titleVisibility: .visible,
-                            presenting: selected) { occurrence in
-            Button("Reschedule") { afterDialog { rescheduling = occurrence } }
-            Button("View Message and Notes") { afterDialog { readingNotes = occurrence.reminder } }
-            Button("View Image") { afterDialog { viewingImage = occurrence.reminder } }
-            Button("Edit Reminder") { afterDialog { editing = occurrence } }
-            Button("Delete Reminder", role: .destructive) { deleting = occurrence.reminder }
-        } message: { occurrence in
-            Text("\(occurrence.date.formatted(date: .abbreviated, time: .shortened)) · \(occurrence.reminder.rule.summary)")
-        }
-        .sheet(item: $rescheduling) { RescheduleView(occurrence: $0) }
-        .sheet(item: $readingNotes) { NotesView(reminder: $0) }
-        .sheet(item: $viewingImage) { ImageView(reminder: $0) }
-        .sheet(item: $editing) { ReminderFormView(reminder: $0.reminder, occurrence: $0) }
-        .deleteReminderAlert($deleting)
-    }
-
-    private var isShowingActions: Binding<Bool> {
-        Binding(get: { selected != nil }, set: { if !$0 { selected = nil } })
     }
 
     private func toggleDone(_ occurrence: Occurrence) {
@@ -241,6 +218,51 @@ private struct DeleteReminderAlert: ViewModifier {
         } message: { _ in
             Text("This removes the reminder and its history. You can't undo it.")
         }
+    }
+}
+
+/// What's open for a ring in an OccurrenceList: its action menu and the sheets it leads to.
+struct OccurrenceActions {
+    var selected: Occurrence?
+    var rescheduling: Occurrence?
+    var readingNotes: Reminder?
+    var viewingImage: Reminder?
+    var editing: Occurrence?
+    var deleting: Reminder?
+}
+
+extension View {
+    /// Goes on the List itself, not on its contents. Inside a List these attach to the rows,
+    /// which come and go as the list updates and take an open sheet with them.
+    func occurrenceActions(_ actions: Binding<OccurrenceActions>) -> some View {
+        modifier(OccurrenceActionsModifier(actions: actions))
+    }
+}
+
+private struct OccurrenceActionsModifier: ViewModifier {
+    @Binding var actions: OccurrenceActions
+
+    func body(content: Content) -> some View {
+        content
+            .confirmationDialog(actions.selected?.reminder.message ?? "", isPresented: isShowingActions,
+                                titleVisibility: .visible, presenting: actions.selected) { occurrence in
+                Button("Reschedule") { afterDialog { actions.rescheduling = occurrence } }
+                Button("View Message and Notes") { afterDialog { actions.readingNotes = occurrence.reminder } }
+                Button("View Image") { afterDialog { actions.viewingImage = occurrence.reminder } }
+                Button("Edit Reminder") { afterDialog { actions.editing = occurrence } }
+                Button("Delete Reminder", role: .destructive) { actions.deleting = occurrence.reminder }
+            } message: { occurrence in
+                Text("\(occurrence.date.formatted(date: .abbreviated, time: .shortened)) · \(occurrence.reminder.rule.summary)")
+            }
+            .sheet(item: $actions.rescheduling) { RescheduleView(occurrence: $0) }
+            .sheet(item: $actions.readingNotes) { NotesView(reminder: $0) }
+            .sheet(item: $actions.viewingImage) { ImageView(reminder: $0) }
+            .sheet(item: $actions.editing) { ReminderFormView(reminder: $0.reminder, occurrence: $0) }
+            .deleteReminderAlert($actions.deleting)
+    }
+
+    private var isShowingActions: Binding<Bool> {
+        Binding(get: { actions.selected != nil }, set: { if !$0 { actions.selected = nil } })
     }
 }
 

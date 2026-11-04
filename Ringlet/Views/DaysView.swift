@@ -8,11 +8,13 @@ struct DaysView: View {
     @State private var isShowingSettings = false
     @State private var isShowingHelp = false
     @State private var isShowingHistory = false
+    @State private var actions = OccurrenceActions()
 
     var body: some View {
         List {
-            OccurrenceList(day: router.day)
+            OccurrenceList(day: router.day, actions: $actions)
         }
+        .occurrenceActions($actions)
         .ringletBackground()
         .safeAreaInset(edge: .top, spacing: 0) {
             DayPicker(day: $router.day)

@@ -76,7 +76,27 @@ enum Planner {
             result.append(Occurrence(reminder: reminder, key: mark.key, date: moved, isMoved: true))
         }
 
-        return result.sorted { ($0.date, $0.reminder.message) < ($1.date, $1.reminder.message) }
+        return withoutDuplicates(result, marks: marks)
+            .sorted { ($0.date, $0.reminder.message) < ($1.date, $1.reminder.message) }
+    }
+
+    /// A ring moved onto the same minute as another ring of its reminder would show twice and ring
+    /// twice, for example a weekly ring moved on a week. Keeps one, preferring a ring already done.
+    private static func withoutDuplicates(_ rings: [Occurrence], marks: [String: OccurrenceMark]) -> [Occurrence] {
+        var kept: [String: Occurrence] = [:]
+        for ring in rings {
+            let slot = "\(ring.reminder.id)|\(ring.date.timeIntervalSince1970)"
+            guard let other = kept[slot] else {
+                kept[slot] = ring
+                continue
+            }
+            let isDone = marks[ring.key]?.isDone == true
+            let otherIsDone = marks[other.key]?.isDone == true
+            if isDone != otherIsDone ? isDone : other.isMoved {
+                kept[slot] = ring
+            }
+        }
+        return Array(kept.values)
     }
 
     /// Finds a ring from its key, wherever it has been moved to.
