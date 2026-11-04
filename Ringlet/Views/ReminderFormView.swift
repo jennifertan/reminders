@@ -102,8 +102,8 @@ struct ReminderDraft {
 /// Adds or edits a reminder.
 struct ReminderFormView: View {
     private let existing: Reminder?
-    /// The ring this edit was opened from, if any.
-    private let occurrence: Occurrence?
+    /// True when opened from a day's list, so the Days tab can follow the reminder if it leaves that day.
+    private let followsDay: Bool
     private let onSaved: () -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -111,18 +111,11 @@ struct ReminderFormView: View {
     @State private var draft: ReminderDraft
     @State private var problem: String?
     @State private var photoItem: PhotosPickerItem?
-    @State private var pendingMove: PendingMove?
-
-    /// One ring of a repeating reminder that the edit would move, while we ask how far the edit goes.
-    private struct PendingMove {
-        let occurrence: Occurrence
-        let target: Date
-    }
 
     /// Edits an existing reminder, in its own sheet.
-    init(reminder: Reminder, occurrence: Occurrence? = nil) {
+    init(reminder: Reminder, followsDay: Bool = false) {
         existing = reminder
-        self.occurrence = occurrence
+        self.followsDay = followsDay
         onSaved = {}
         _draft = State(initialValue: ReminderDraft(reminder))
     }
@@ -130,7 +123,7 @@ struct ReminderFormView: View {
     /// Adds a new reminder of a kind, pushed from the type picker.
     init(newKind kind: ReminderKind, startDay: Date, onSaved: @escaping () -> Void) {
         existing = nil
-        occurrence = nil
+        followsDay = false
         self.onSaved = onSaved
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: .now)
@@ -176,15 +169,6 @@ struct ReminderFormView: View {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save", action: save).fontWeight(.semibold)
             }
-        }
-        .alert("Change this repeating reminder?",
-               isPresented: Binding(get: { pendingMove != nil }, set: { if !$0 { pendingMove = nil } }),
-               presenting: pendingMove) { move in
-            Button("This Occurrence Only") { saveOccurrence(move) }
-            Button("Update Permanently") { commit() }
-            Button("Cancel", role: .cancel) {}
-        } message: { move in
-            Text("This occurrence moves from \(Self.moveText(move.occurrence.date)) to \(Self.moveText(move.target)). Updating permanently changes every future one too. Other changes, like the message, apply to all of them.")
         }
         .onChange(of: draft.rule.kind) {
             if draft.rule.kind == .wakeUp {
@@ -291,7 +275,7 @@ struct ReminderFormView: View {
     @ViewBuilder
     private var whenSection: some View {
         let kind = draft.rule.kind
-        Section("When") {
+        Section {
             DatePicker(kind == .oneTime || kind == .yearly ? "Date" : "Start Date",
                        selection: $draft.rule.start, displayedComponents: .date)
 
@@ -369,6 +353,12 @@ struct ReminderFormView: View {
             if kind == .cycle {
                 Stepper("\(draft.rule.cycleOn) days on", value: $draft.rule.cycleOn, in: 1...365)
                 Stepper("\(draft.rule.cycleOff) days off", value: $draft.rule.cycleOff, in: 0...365)
+            }
+        } header: {
+            Text("When")
+        } footer: {
+            if existing != nil && kind.repeats {
+                Text("Changes every future reminder. To move just one, use Reschedule.")
             }
         }
     }
@@ -461,22 +451,24 @@ struct ReminderFormView: View {
             withAnimation { self.problem = problem }
             return
         }
-        if let move = occurrenceMove() {
-            pendingMove = move
+        let reminder: Reminder
+        if let existing {
+            reminder = existing
         } else {
-            commit()
+            reminder = Reminder(kind: draft.rule.kind)
+            modelContext.insert(reminder)
         }
-    }
-
-    /// The ring that would move if this edit changes a repeating reminder's day or time, or nil
-    /// when "this occurrence only" wouldn't mean anything.
-    private func occurrenceMove() -> PendingMove? {
-        guard let existing, existing.kind.repeats, draft.rule.kind == existing.kind,
-              let ring = occurrence ?? nextRing(of: existing),
-              let original = Planner.parse(ring.key)?.date
-        else { return nil }
-        let target = draft.rule.movedRing(original, from: existing.rule)
-        return target == original ? nil : PendingMove(occurrence: ring, target: target)
+        draft.apply(to: reminder)
+        try? modelContext.save()
+        followToNewDay(reminder)
+        let context = modelContext
+        Task {
+            _ = await NotificationScheduler.requestAuthorization()
+            await NotificationScheduler.reschedule(context: context)
+        }
+        SoundPlayer.shared.stop()
+        onSaved()
+        dismiss()
     }
 
     private func nextRing(of reminder: Reminder) -> Occurrence? {
@@ -491,57 +483,16 @@ struct ReminderFormView: View {
         return nil
     }
 
-    /// Keeps the schedule as it was and moves only this ring. Everything else on the form still applies.
-    private func saveOccurrence(_ move: PendingMove) {
-        guard let existing else { return }
-        var kept = draft
-        kept.rule = existing.rule
-        let mark = OccurrenceMark.findOrInsert(move.occurrence.key, in: modelContext)
-        mark.movedTo = move.target
-        mark.isDone = false
-        NotificationScheduler.clear(key: move.occurrence.key)
-        finishSaving(kept, to: existing)
-    }
-
-    private func commit() {
-        let reminder: Reminder
-        if let existing {
-            reminder = existing
-        } else {
-            reminder = Reminder(kind: draft.rule.kind)
-            modelContext.insert(reminder)
-        }
-        finishSaving(draft, to: reminder)
-    }
-
-    private func finishSaving(_ values: ReminderDraft, to reminder: Reminder) {
-        values.apply(to: reminder)
-        try? modelContext.save()
-        followToNewDay(reminder)
-        let context = modelContext
-        Task {
-            _ = await NotificationScheduler.requestAuthorization()
-            await NotificationScheduler.reschedule(context: context)
-        }
-        SoundPlayer.shared.stop()
-        onSaved()
-        dismiss()
-    }
-
     /// If the edit took this reminder off the day showing on the Days tab, goes to where it now
     /// rings, so it doesn't look like it disappeared.
     private func followToNewDay(_ reminder: Reminder) {
         let router = AppRouter.shared
-        guard occurrence != nil, router.tab == .days else { return }
+        guard followsDay, router.tab == .days else { return }
         let marks = Planner.marksByKey((try? modelContext.fetch(FetchDescriptor<OccurrenceMark>())) ?? [])
         let stillHere = !Planner.occurrences(on: router.day, reminders: [reminder], marks: marks).isEmpty
         if !stillHere, let next = nextRing(of: reminder) {
             router.day = Calendar.current.startOfDay(for: next.date)
         }
-    }
-
-    private static func moveText(_ date: Date) -> String {
-        date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute())
     }
 }
 

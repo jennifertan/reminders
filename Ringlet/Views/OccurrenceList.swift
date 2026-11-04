@@ -227,7 +227,7 @@ struct OccurrenceActions {
     var rescheduling: Occurrence?
     var readingNotes: Reminder?
     var viewingImage: Reminder?
-    var editing: Occurrence?
+    var editing: Reminder?
     var deleting: Reminder?
 }
 
@@ -249,7 +249,7 @@ private struct OccurrenceActionsModifier: ViewModifier {
                 Button("Reschedule") { afterDialog { actions.rescheduling = occurrence } }
                 Button("View Message and Notes") { afterDialog { actions.readingNotes = occurrence.reminder } }
                 Button("View Image") { afterDialog { actions.viewingImage = occurrence.reminder } }
-                Button("Edit Reminder") { afterDialog { actions.editing = occurrence } }
+                Button("Edit Reminder") { afterDialog { actions.editing = occurrence.reminder } }
                 Button("Delete Reminder", role: .destructive) { actions.deleting = occurrence.reminder }
             } message: { occurrence in
                 Text("\(occurrence.date.formatted(date: .abbreviated, time: .shortened)) · \(occurrence.reminder.rule.summary)")
@@ -257,7 +257,7 @@ private struct OccurrenceActionsModifier: ViewModifier {
             .sheet(item: $actions.rescheduling) { RescheduleView(occurrence: $0) }
             .sheet(item: $actions.readingNotes) { NotesView(reminder: $0) }
             .sheet(item: $actions.viewingImage) { ImageView(reminder: $0) }
-            .sheet(item: $actions.editing) { ReminderFormView(reminder: $0.reminder, occurrence: $0) }
+            .sheet(item: $actions.editing) { ReminderFormView(reminder: $0, followsDay: true) }
             .deleteReminderAlert($actions.deleting)
     }
 
