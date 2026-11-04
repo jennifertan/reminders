@@ -103,7 +103,7 @@ struct ReminderListView: View {
             Button("View Image") { afterDialog { viewingImage = reminder } }
             Button("Edit Reminder") { afterDialog { editing = reminder } }
             Button("Test the Alarm") { testAlarm(reminder) }
-            Button("Delete Reminder", role: .destructive) { deleting = reminder }
+            Button("Delete Reminder", role: .destructive) { afterDialog { deleting = reminder } }
         } message: { reminder in
             Text(reminder.rule.summary)
         }

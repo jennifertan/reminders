@@ -250,7 +250,7 @@ private struct OccurrenceActionsModifier: ViewModifier {
                 Button("View Message and Notes") { afterDialog { actions.readingNotes = occurrence.reminder } }
                 Button("View Image") { afterDialog { actions.viewingImage = occurrence.reminder } }
                 Button("Edit Reminder") { afterDialog { actions.editing = occurrence.reminder } }
-                Button("Delete Reminder", role: .destructive) { actions.deleting = occurrence.reminder }
+                Button("Delete Reminder", role: .destructive) { afterDialog { actions.deleting = occurrence.reminder } }
             } message: { occurrence in
                 Text("\(occurrence.date.formatted(date: .abbreviated, time: .shortened)) · \(occurrence.reminder.rule.summary)")
             }
@@ -266,8 +266,8 @@ private struct OccurrenceActionsModifier: ViewModifier {
     }
 }
 
-/// Runs a step that opens a sheet once a confirmation dialog has finished closing. On iOS 27 a
-/// sheet presented while the dialog is still animating away is dropped, so the first tap did nothing.
+/// Runs a step that opens a sheet or alert once a confirmation dialog has finished closing. On iOS 27
+/// one presented while the dialog is still animating away is dropped, so the first tap did nothing.
 @MainActor
 func afterDialog(_ action: @escaping @MainActor () -> Void) {
     Task { @MainActor in
