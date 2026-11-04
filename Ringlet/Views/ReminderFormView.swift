@@ -22,7 +22,8 @@ struct ReminderDraft {
     /// Starting values for a new reminder of a kind.
     init(kind: ReminderKind, start: Date) {
         let calendar = Calendar.current
-        rule = ScheduleRule(kind: kind, start: start, times: [kind == .wakeUp ? 7 * 60 : 9 * 60])
+        let now = calendar.component(.hour, from: .now) * 60 + calendar.component(.minute, from: .now)
+        rule = ScheduleRule(kind: kind, start: start, times: [kind == .wakeUp ? 7 * 60 : now])
         rule.weekdays = kind == .wakeUp ? [2, 3, 4, 5, 6] : [calendar.component(.weekday, from: start)]
         rule.monthDays = [calendar.component(.day, from: start)]
         rule.nthWeekday = calendar.component(.weekday, from: start)

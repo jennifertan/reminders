@@ -74,7 +74,8 @@ struct RescheduleView: View {
 
     init(occurrence: Occurrence) {
         self.occurrence = occurrence
-        _date = State(initialValue: occurrence.date)
+        // A ring that has already gone starts from now, since it can only move forward.
+        _date = State(initialValue: max(occurrence.date, .now))
     }
 
     var body: some View {
