@@ -140,6 +140,7 @@ struct RescheduleView: View {
     private func moveOneTimeReminder() {
         let calendar = Calendar.current
         let reminder = occurrence.reminder
+        OccurrenceMark.reopen(reminder, in: modelContext)
         reminder.start = calendar.startOfDay(for: date)
         reminder.times = [calendar.component(.hour, from: date) * 60 + calendar.component(.minute, from: date)]
         if let mark = OccurrenceMark.find(occurrence.key, in: modelContext) {

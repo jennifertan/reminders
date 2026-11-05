@@ -30,6 +30,7 @@ struct RingletApp: App {
         #endif
         AlarmedImport.loadBundledRecordsOnce(into: Store.container.mainContext)
         OccurrenceMark.applyMovedOneTimeReminders(in: Store.container.mainContext)
+        OccurrenceMark.turnOffDoneOneTimeReminders(in: Store.container.mainContext)
         Theme.applyBarAppearance()
     }
 

@@ -204,7 +204,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         case NotificationScheduler.doneAction:
             await MainActor.run {
                 let context = Store.container.mainContext
-                OccurrenceMark.findOrInsert(key, in: context).isDone = true
+                OccurrenceMark.setDone(true, key: key, in: context)
                 try? context.save()
                 NotificationScheduler.clear(key: key)
             }

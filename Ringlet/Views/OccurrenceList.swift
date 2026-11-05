@@ -153,7 +153,7 @@ struct OccurrenceList: View {
         if mark.isSkipped {
             mark.isSkipped = false
         } else {
-            mark.isDone.toggle()
+            OccurrenceMark.setDone(!mark.isDone, key: occurrence.key, in: modelContext)
         }
         if mark.isDone { NotificationScheduler.clear(key: occurrence.key) }
         try? modelContext.save()

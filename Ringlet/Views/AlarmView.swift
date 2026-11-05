@@ -76,7 +76,7 @@ struct AlarmView: View {
             Spacer()
             VStack(spacing: 12) {
                 Button {
-                    OccurrenceMark.findOrInsert(occurrence.key, in: modelContext).isDone = true
+                    OccurrenceMark.setDone(true, key: occurrence.key, in: modelContext)
                     NotificationScheduler.clear(key: occurrence.key)
                     finish()
                 } label: {

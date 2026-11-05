@@ -148,6 +148,30 @@ final class OccurrenceMark {
         return mark
     }
 
+    /// Marks a ring done or not. A one-time reminder has nothing left to do once it's done, so it
+    /// turns off with it, and turns back on if it's unticked.
+    static func setDone(_ isDone: Bool, key: String, in context: ModelContext) {
+        let mark = findOrInsert(key, in: context)
+        mark.isDone = isDone
+        if isDone { mark.isSkipped = false }
+        guard let id = Planner.parse(key)?.reminderID else { return }
+        var descriptor = FetchDescriptor<Reminder>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        if let reminder = try? context.fetch(descriptor).first, reminder.kind == .oneTime {
+            reminder.isEnabled = !isDone
+        }
+    }
+
+    /// Clears a one-time reminder's done mark and turns it on, for when it's been given a new life:
+    /// switched back on, or edited or moved to a new date.
+    static func reopen(_ reminder: Reminder, in context: ModelContext) {
+        guard reminder.kind == .oneTime, let minute = reminder.rule.minutes.first else { return }
+        let key = Planner.key(reminderID: reminder.id, day: reminder.start, minute: minute)
+        guard let mark = find(key, in: context), mark.isDone else { return }
+        context.delete(mark)
+        reminder.isEnabled = true
+    }
+
     /// Removes marks for a reminder that has been deleted.
     static func deleteAll(for reminderID: UUID, in context: ModelContext) {
         let prefix = reminderID.uuidString + "|"
@@ -351,6 +375,20 @@ extension AlarmedImport {
 }
 
 extension OccurrenceMark {
+    /// Older builds left a done one-time reminder switched on. Turns those off.
+    static func turnOffDoneOneTimeReminders(in context: ModelContext) {
+        let marks = (try? context.fetch(FetchDescriptor<OccurrenceMark>(predicate: #Predicate { $0.isDone }))) ?? []
+        let reminders = (try? context.fetch(FetchDescriptor<Reminder>(predicate: #Predicate { $0.isEnabled }))) ?? []
+        let doneKeys = Set(marks.map(\.key))
+        for reminder in reminders where reminder.kind == .oneTime {
+            guard let minute = reminder.rule.minutes.first else { continue }
+            if doneKeys.contains(Planner.key(reminderID: reminder.id, day: reminder.start, minute: minute)) {
+                reminder.isEnabled = false
+            }
+        }
+        try? context.save()
+    }
+
     /// Older builds moved a one-time reminder's only ring with a mark, which left the reminder
     /// itself on the old date. Moves those reminders properly.
     static func applyMovedOneTimeReminders(in context: ModelContext) {

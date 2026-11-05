@@ -455,6 +455,7 @@ struct ReminderFormView: View {
             reminder = Reminder(kind: draft.rule.kind)
             modelContext.insert(reminder)
         }
+        if draft.rule != reminder.rule { OccurrenceMark.reopen(reminder, in: modelContext) }
         draft.apply(to: reminder)
         try? modelContext.save()
         followToNewDay(reminder)

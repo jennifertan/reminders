@@ -56,11 +56,14 @@ enum Planner {
         let day = calendar.startOfDay(for: day)
         var result: [Occurrence] = []
 
-        for reminder in reminders where reminder.isEnabled || includeTurnedOff {
+        for reminder in reminders {
             let rule = reminder.rule
             guard rule.occurs(on: day, calendar: calendar) else { continue }
             for minute in rule.minutes {
                 let ringKey = Self.key(reminderID: reminder.id, day: day, minute: minute)
+                // A done one-time reminder is turned off, but stays on its day, ticked, so it can be undone.
+                let isDoneOneTime = reminder.kind == .oneTime && marks[ringKey]?.isDone == true
+                guard reminder.isEnabled || includeTurnedOff || isDoneOneTime else { continue }
                 if marks[ringKey]?.movedTo != nil { continue }
                 let date = calendar.date(byAdding: .minute, value: minute, to: day) ?? day
                 result.append(Occurrence(reminder: reminder, key: ringKey, date: date, isMoved: false))

@@ -227,6 +227,7 @@ struct ReminderRow: View {
             }
             .labelsHidden()
             .onChange(of: reminder.isEnabled) {
+                if reminder.isEnabled { OccurrenceMark.reopen(reminder, in: modelContext) }
                 try? modelContext.save()
                 Task { await NotificationScheduler.reschedule(context: modelContext) }
             }
