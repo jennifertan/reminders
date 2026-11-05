@@ -7,6 +7,7 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openURL) private var openURL
     @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.system
+    @AppStorage(AlarmScreen.storageKey) private var showsAlarmScreen = true
     @Query private var reminders: [Reminder]
     @State private var status = UNAuthorizationStatus.notDetermined
     @State private var queued = 0
@@ -37,6 +38,12 @@ struct SettingsView: View {
                     Text("Notifications")
                 } footer: {
                     Text("Ringlet queues the next 60 rings with iOS, which is the most it allows, and tops the queue up each time you open the app. Open Ringlet at least every few days so nothing is missed.")
+                }
+
+                Section {
+                    Toggle("Full-Screen Alarm", isOn: $showsAlarmScreen)
+                } footer: {
+                    Text("When Ringlet is open, a ring fills the screen. Turn this off to get a normal banner instead. Reminders still show on the lock screen and in Notification Center either way.")
                 }
 
                 Section("Sounds") {

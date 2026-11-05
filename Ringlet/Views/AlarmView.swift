@@ -1,6 +1,15 @@
 import SwiftData
 import SwiftUI
 
+/// The setting for whether a ring takes over the screen while Ringlet is open.
+enum AlarmScreen {
+    static let storageKey = "showsAlarmScreen"
+
+    static var isOn: Bool {
+        UserDefaults.standard.object(forKey: storageKey) as? Bool ?? true
+    }
+}
+
 /// Full-screen alarm shown when a reminder rings while Ringlet is open. The sound plays once, or for up to a minute on a wake-up alarm.
 struct AlarmView: View {
     let alarm: RingingAlarm

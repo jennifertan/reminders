@@ -187,7 +187,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         async -> UNNotificationPresentationOptions {
         let info = notification.request.content.userInfo
         let event = AlarmEvent(rawValue: info["event"] as? String ?? "") ?? .main
-        guard event != .preAlarm, let key = info["key"] as? String else {
+        guard event != .preAlarm, AlarmScreen.isOn, let key = info["key"] as? String else {
             return [.banner, .sound, .list]
         }
         await MainActor.run { AppRouter.shared.showAlarm(key: key, event: event) }
