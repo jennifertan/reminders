@@ -151,7 +151,7 @@ struct RescheduleView: View {
     private func moveOneTimeReminder() {
         let calendar = Calendar.current
         let reminder = occurrence.reminder
-        OccurrenceMark.reopen(reminder, in: modelContext)
+        OccurrenceMark.reopen(reminder, keepingHistory: true, in: modelContext)
         reminder.start = calendar.startOfDay(for: date)
         reminder.times = [calendar.component(.hour, from: date) * 60 + calendar.component(.minute, from: date)]
         if let mark = OccurrenceMark.find(occurrence.key, in: modelContext) {
@@ -182,6 +182,8 @@ struct HistoryView: View {
         let date: Date
         let detail: String
         let reminder: Reminder?
+        var symbol: String?
+        var hue: Double?
     }
 
     var body: some View {
@@ -221,6 +223,8 @@ struct HistoryView: View {
         HStack(spacing: 14) {
             if let reminder = entry.reminder {
                 ReminderImage(reminder)
+            } else if let symbol = entry.symbol, let hue = entry.hue {
+                ReminderImage(photo: nil, symbol: symbol, hue: hue)
             } else {
                 Image(systemName: "checkmark")
                     .font(.headline)
@@ -263,8 +267,9 @@ struct HistoryView: View {
             !["day", "days", "week", "weeks"].contains { item.repeatSummary.hasSuffix(" " + $0) }
         }.map { item in
             Entry(id: item.sourceID, title: item.title, notes: item.notes, date: item.completedAt,
-                  detail: ([item.source] + (item.repeatSummary.isEmpty ? [] : [item.repeatSummary])).joined(separator: " · "),
-                  reminder: nil)
+                  detail: ((item.source == "Ringlet" ? [] : [item.source]) + (item.repeatSummary.isEmpty ? [] : [item.repeatSummary]))
+                      .joined(separator: " · "),
+                  reminder: nil, symbol: item.symbol, hue: item.hue)
         }
         return (fromMarks + fromArchive).sorted { $0.date > $1.date }
     }

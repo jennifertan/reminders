@@ -225,7 +225,7 @@ private struct EmptyDay: View {
 }
 
 extension View {
-    /// Asks before deleting a reminder, then removes it and everything recorded about it.
+    /// Asks before deleting a reminder, then removes it. Done History keeps what was done.
     func deleteReminderAlert(_ reminder: Binding<Reminder?>) -> some View {
         modifier(DeleteReminderAlert(reminder: reminder))
     }
@@ -240,14 +240,13 @@ private struct DeleteReminderAlert: ViewModifier {
                       isPresented: Binding(get: { reminder != nil }, set: { if !$0 { reminder = nil } }),
                       presenting: reminder) { reminder in
             Button("Delete", role: .destructive) {
-                OccurrenceMark.deleteAll(for: reminder.id, in: modelContext)
-                modelContext.delete(reminder)
+                OccurrenceMark.delete(reminder, keepingHistoryIn: modelContext)
                 try? modelContext.save()
                 Task { await NotificationScheduler.reschedule(context: modelContext) }
             }
             Button("Keep It", role: .cancel) {}
         } message: { _ in
-            Text("This removes the reminder and its history. You can't undo it.")
+            Text("This removes the reminder. You can't undo it. Anything you've marked done stays in Done History.")
         }
     }
 }

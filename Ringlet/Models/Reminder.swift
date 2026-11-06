@@ -114,6 +114,13 @@ final class Reminder {
         }
     }
 
+    /// How often it repeats, for Done History. Empty for a one-off.
+    var historySummary: String {
+        guard kind.repeats else { return "" }
+        guard let unit = kind.intervalUnit else { return kind.title }
+        return interval <= 1 ? "Every \(unit)" : "Every \(interval) \(unit)s"
+    }
+
     var hasNotes: Bool { !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     /// True for a one-time reminder whose day has passed.
@@ -164,21 +171,34 @@ final class OccurrenceMark {
 
     /// Clears a one-time reminder's done mark and turns it on, for when it's been given a new life:
     /// switched back on, or edited or moved to a new date.
-    static func reopen(_ reminder: Reminder, in context: ModelContext) {
+    static func reopen(_ reminder: Reminder, keepingHistory: Bool = false, in context: ModelContext) {
         guard reminder.kind == .oneTime, let minute = reminder.rule.minutes.first else { return }
         let key = Planner.key(reminderID: reminder.id, day: reminder.start, minute: minute)
         guard let mark = find(key, in: context), mark.isDone else { return }
+        if keepingHistory { mark.archive(of: reminder, in: context) }
         context.delete(mark)
         reminder.isEnabled = true
     }
 
-    /// Removes marks for a reminder that has been deleted.
-    static func deleteAll(for reminderID: UUID, in context: ModelContext) {
-        let prefix = reminderID.uuidString + "|"
+    /// Deletes a reminder and its marks. What was done with it stays in Done History.
+    static func delete(_ reminder: Reminder, keepingHistoryIn context: ModelContext) {
+        let prefix = reminder.id.uuidString + "|"
         let marks = (try? context.fetch(FetchDescriptor<OccurrenceMark>())) ?? []
         for mark in marks where mark.key.hasPrefix(prefix) {
+            mark.archive(of: reminder, in: context)
             context.delete(mark)
         }
+        context.delete(reminder)
+    }
+
+    /// Copies a done ring into Done History's own records, which outlive the reminder.
+    func archive(of reminder: Reminder, in context: ModelContext) {
+        guard isDone, let date = movedTo ?? Planner.parse(key)?.date else { return }
+        context.insert(ArchivedDone(
+            sourceID: "ringlet:" + key, source: "Ringlet", title: reminder.message, notes: reminder.notes,
+            completedAt: date, dueAt: nil, repeatSummary: reminder.historySummary,
+            symbol: reminder.symbol, hue: reminder.hue
+        ))
     }
 }
 
@@ -194,8 +214,14 @@ final class ArchivedDone {
     var dueAt: Date?
     /// For example "Every 2 weeks", or empty for a one-off.
     var repeatSummary: String
+    /// The picture of a deleted Ringlet reminder. Nil for items from other apps.
+    var symbol: String?
+    var hue: Double?
 
-    init(sourceID: String, source: String, title: String, notes: String, completedAt: Date, dueAt: Date?, repeatSummary: String) {
+    init(sourceID: String, source: String, title: String, notes: String, completedAt: Date, dueAt: Date?,
+         repeatSummary: String, symbol: String? = nil, hue: Double? = nil) {
+        self.symbol = symbol
+        self.hue = hue
         self.sourceID = sourceID
         self.source = source
         self.title = title

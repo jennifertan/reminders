@@ -90,12 +90,12 @@ struct SettingsView: View {
             .confirmationDialog("Delete all \(reminders.count) reminders?", isPresented: $isConfirmingDeleteAll,
                                 titleVisibility: .visible) {
                 Button("Delete All", role: .destructive) {
+                    reminders.forEach { OccurrenceMark.delete($0, keepingHistoryIn: modelContext) }
                     try? modelContext.delete(model: OccurrenceMark.self)
-                    try? modelContext.delete(model: Reminder.self)
                     save()
                 }
             } message: {
-                Text("This removes every reminder and its history. You can't undo it.")
+                Text("This removes every reminder. You can't undo it. Anything you've marked done stays in Done History.")
             }
             .task { await refresh() }
             .onDisappear { SoundPlayer.shared.stop() }
