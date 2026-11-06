@@ -84,9 +84,11 @@ struct RescheduleView: View {
                 Section {
                     DatePicker("New time", selection: $date)
                     HStack {
-                        quick("+10 min", minutes: 10)
-                        quick("+1 hour", minutes: 60)
-                        quick("Tomorrow", minutes: 24 * 60)
+                        // Today can't go back in time, so a time already gone today becomes now.
+                        quick("Today", to: { max(ringTime(daysFromToday: 0), .now) })
+                        quick("3 Hours", to: { Date.now.addingTimeInterval(3 * 60 * 60) })
+                        quick("Tomorrow", to: { ringTime(daysFromToday: 1) })
+                        quick("1 Week", to: { ringTime(daysFromToday: 7) })
                     }
                     .buttonStyle(.bordered)
                 } footer: {
@@ -130,9 +132,18 @@ struct RescheduleView: View {
 
     private var original: Date { Planner.parse(occurrence.key)?.date ?? occurrence.date }
 
-    private func quick(_ title: String, minutes: Int) -> some View {
-        Button(title) { date = date.addingTimeInterval(Double(minutes) * 60) }
+    private func quick(_ title: String, to target: @escaping () -> Date) -> some View {
+        Button(title) { date = target() }
             .font(.footnote)
+    }
+
+    /// That day, counted from today, at the time this ring is set for.
+    private func ringTime(daysFromToday days: Int) -> Date {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        let ring = calendar.dateComponents([.hour, .minute], from: occurrence.date)
+        let day = calendar.date(byAdding: .day, value: days, to: today) ?? today
+        return calendar.date(bySettingHour: ring.hour ?? 0, minute: ring.minute ?? 0, second: 0, of: day) ?? day
     }
 
     /// A one-time reminder has only this ring, so move the reminder itself. That way the
