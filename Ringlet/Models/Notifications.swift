@@ -28,12 +28,15 @@ enum NotificationScheduler {
     private static let snoozePrefix = "snooze-"
     private static let maxQueued = 60
     private static let daysAhead = 14
+    /// One thread for every reminder, so iOS stacks them into a single group on the lock screen.
+    private static let threadID = "ringlet"
 
     static func registerCategories() {
         let done = UNNotificationAction(identifier: doneAction, title: "Mark Done", options: [])
         let snooze = UNNotificationAction(identifier: snoozeAction, title: "Snooze", options: [])
         let category = UNNotificationCategory(identifier: categoryID, actions: [done, snooze],
-                                              intentIdentifiers: [], options: [])
+                                              intentIdentifiers: [], hiddenPreviewsBodyPlaceholder: nil,
+                                              categorySummaryFormat: "%u more reminders", options: [])
         UNUserNotificationCenter.current().setNotificationCategories([category])
     }
 
@@ -133,7 +136,7 @@ enum NotificationScheduler {
         } else {
             content.interruptionLevel = .active
         }
-        content.threadIdentifier = reminder.id.uuidString
+        content.threadIdentifier = threadID
         content.userInfo = [
             "key": occurrence.key,
             "event": event.rawValue,
@@ -153,6 +156,7 @@ enum NotificationScheduler {
         guard let content = original.mutableCopy() as? UNMutableNotificationContent else { return }
         content.userInfo["event"] = AlarmEvent.snooze.rawValue
         content.categoryIdentifier = categoryID
+        content.threadIdentifier = threadID
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: Double(max(1, minutes)) * 60, repeats: false)
         let request = UNNotificationRequest(identifier: snoozePrefix + key, content: content, trigger: trigger)
         try? await UNUserNotificationCenter.current().add(request)
