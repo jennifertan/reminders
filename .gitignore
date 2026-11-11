@@ -6,3 +6,4 @@ build/
 .swiftpm/
 Config/Secrets.xcconfig
 .claude/settings.local.json
+Config/Alarmed/
