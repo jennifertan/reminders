@@ -170,12 +170,26 @@ struct ReminderFormView: View {
                 Button("Save", action: save).fontWeight(.semibold)
             }
         }
-        .onChange(of: draft.rule.kind) {
+        .onChange(of: draft.rule.kind) { oldKind, newKind in
+            // Day pickers the old kind didn't use still hold whatever they were set to when the
+            // reminder was made, which may not be its date. Start them on the reminder's own day.
+            let usedWeekdays = oldKind == .weekly || oldKind == .wakeUp
+            draft.rule.matchDays(weekdays: newKind == .weekly && !usedWeekdays,
+                                 month: newKind == .monthly && oldKind != .monthly)
             if draft.rule.kind == .wakeUp {
                 draft.rule.times = Array(draft.rule.times.prefix(1))
                 if draft.rule.weekdays.isEmpty { draft.rule.weekdays = [2, 3, 4, 5, 6] }
             }
             if draft.rule.times.isEmpty { draft.rule.times = [9 * 60] }
+        }
+        .onChange(of: draft.rule.start) { oldStart, _ in
+            // A day picked only because it was the old start date follows the start date.
+            var old = draft.rule
+            old.start = oldStart
+            old.matchDays(weekdays: true, month: true)
+            draft.rule.matchDays(weekdays: draft.rule.kind == .weekly && draft.rule.weekdays == old.weekdays,
+                                 month: draft.rule.kind == .monthly && draft.rule.monthDays == old.monthDays
+                                     && draft.rule.nthWeekday == old.nthWeekday)
         }
         .onChange(of: photoItem) {
             guard let photoItem else { return }
