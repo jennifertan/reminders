@@ -145,10 +145,11 @@ struct ScheduleRule: Equatable {
 
         case .weekly:
             guard weekdays.contains(weekday) else { return false }
-            guard let startWeek = calendar.dateInterval(of: .weekOfYear, for: first)?.start,
-                  let thisWeek = calendar.dateInterval(of: .weekOfYear, for: day)?.start
-            else { return false }
-            let weeks = (calendar.dateComponents([.day], from: startWeek, to: thisWeek).day ?? 0) / 7
+            // Counts whole weeks between the start's week and this day's week by plain day
+            // arithmetic, so it doesn't depend on how Calendar works out week-of-year intervals.
+            let startWeekday = calendar.component(.weekday, from: first)
+            let startOffset = (startWeekday - calendar.firstWeekday + 7) % 7
+            let weeks = (daysIn + startOffset) / 7
             return weeks % every == 0
 
         case .monthly:
