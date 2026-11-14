@@ -127,7 +127,7 @@ struct OccurrenceList: View {
         Group {
             if occurrences.isEmpty {
                 Section {
-                    EmptyDay(day: day, hasReminders: !reminders.isEmpty)
+                    EmptyDay(day: day, hasReminders: !reminders.isEmpty, hiddenByFilter: hiddenCount(markMap))
                 }
             } else {
                 Section {
@@ -145,6 +145,13 @@ struct OccurrenceList: View {
             }
         }
         .onReceive(clock) { now = $0 }
+    }
+
+    /// Rings on this day that the Calendar's type filter leaves out.
+    private func hiddenCount(_ markMap: [String: OccurrenceMark]) -> Int {
+        guard isCalendar, !hiddenKinds.isEmpty else { return 0 }
+        let hidden = reminders.filter { hiddenKinds.contains($0.kind) && $0.showsInCalendar }
+        return Planner.occurrences(on: day, reminders: hidden, marks: markMap).count
     }
 
     private func toggleDone(_ occurrence: Occurrence) {
@@ -191,6 +198,7 @@ private struct Tally: View {
 private struct EmptyDay: View {
     let day: Date
     let hasReminders: Bool
+    var hiddenByFilter = 0
     @Environment(\.modelContext) private var modelContext
     @State private var isAdding = false
 
@@ -202,7 +210,9 @@ private struct EmptyDay: View {
             Text(hasReminders ? "Nothing on this day" : "No reminders yet")
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(Color.heading)
-            Text(hasReminders
+            Text(hiddenByFilter > 0
+                 ? "\(hiddenByFilter) reminder\(hiddenByFilter == 1 ? " is" : "s are") hidden by the Calendar filter."
+                 : hasReminders
                  ? "Reminders show up on every day they're due."
                  : "Add a one-time, repeating, wake-up or cycle reminder, or load some examples to see how it works.")
                 .font(.subheadline)
