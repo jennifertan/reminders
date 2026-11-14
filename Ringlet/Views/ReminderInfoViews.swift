@@ -251,7 +251,7 @@ struct HistoryView: View {
         .padding(.vertical, 2)
     }
 
-    private static let hiddenKinds: Set<ReminderKind> = [.daily, .weekly]
+    private static let hiddenKinds: Set<ReminderKind> = [.daily]
 
     private var entries: [Entry] {
         let byID = Dictionary(reminders.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
@@ -262,9 +262,9 @@ struct HistoryView: View {
             return Entry(id: mark.key, title: reminder.message, notes: "", date: mark.movedTo ?? parsed.date,
                          detail: reminder.rule.summary, reminder: reminder)
         }
-        // Daily and weekly items like "Take tablets" would crowd out everything else.
+        // Daily items like "Take tablets" would crowd out everything else.
         let fromArchive = archived.filter { item in
-            !["day", "days", "week", "weeks"].contains { item.repeatSummary.hasSuffix(" " + $0) }
+            !["day", "days"].contains { item.repeatSummary.hasSuffix(" " + $0) }
         }.map { item in
             Entry(id: item.sourceID, title: item.title, notes: item.notes, date: item.completedAt,
                   detail: ((item.source == "Ringlet" ? [] : [item.source]) + (item.repeatSummary.isEmpty ? [] : [item.repeatSummary]))
