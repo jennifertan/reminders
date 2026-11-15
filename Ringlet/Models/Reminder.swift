@@ -328,6 +328,11 @@ enum AlarmedImport {
             // The next ring anchors the schedule, so every-2-weeks and every-6-months rules stay in step.
             reminder.start = calendar.startOfDay(for: due)
             reminder.times = [calendar.component(.hour, from: due) * 60 + calendar.component(.minute, from: due)]
+            // Reminder(kind:) seeds the day pickers from today. Use the reminder's own day instead,
+            // so a one-time reminder later changed to Weekly repeats on the right day.
+            var days = reminder.rule
+            days.matchDays(weekdays: true, month: true)
+            reminder.rule = days
             if let rule = item.repeatRule {
                 reminder.interval = max(1, rule.interval)
                 let weekday = calendar.component(.weekday, from: due)

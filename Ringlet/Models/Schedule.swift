@@ -103,6 +103,21 @@ struct ScheduleRule: Equatable {
         return Array(Set(times)).sorted()
     }
 
+    /// Points the day pickers at the start date: the weekday for weekly, the day of the month and
+    /// weekday for monthly. Used when they were never chosen for this kind, for example after a
+    /// one-time reminder is changed to Weekly, so it repeats on its own day and not some other one.
+    mutating func matchDays(calendar: Calendar = .current, weekdays matchWeekdays: Bool, month matchMonth: Bool) {
+        let weekday = calendar.component(.weekday, from: start)
+        if matchWeekdays { weekdays = [weekday] }
+        if matchMonth {
+            monthDays = [calendar.component(.day, from: start)]
+            nthWeekday = weekday
+            let day = calendar.component(.day, from: start)
+            let lastDay = calendar.range(of: .day, in: .month, for: start)?.count ?? 31
+            nthWeek = day + 7 > lastDay ? -1 : (day - 1) / 7 + 1
+        }
+    }
+
     func occurs(on day: Date, calendar: Calendar = .current) -> Bool {
         let day = calendar.startOfDay(for: day)
         let first = calendar.startOfDay(for: start)
@@ -130,10 +145,11 @@ struct ScheduleRule: Equatable {
 
         case .weekly:
             guard weekdays.contains(weekday) else { return false }
-            guard let startWeek = calendar.dateInterval(of: .weekOfYear, for: first)?.start,
-                  let thisWeek = calendar.dateInterval(of: .weekOfYear, for: day)?.start
-            else { return false }
-            let weeks = (calendar.dateComponents([.day], from: startWeek, to: thisWeek).day ?? 0) / 7
+            // Counts whole weeks between the start's week and this day's week by plain day
+            // arithmetic, so it doesn't depend on how Calendar works out week-of-year intervals.
+            let startWeekday = calendar.component(.weekday, from: first)
+            let startOffset = (startWeekday - calendar.firstWeekday + 7) % 7
+            let weeks = (daysIn + startOffset) / 7
             return weeks % every == 0
 
         case .monthly:

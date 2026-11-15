@@ -19,6 +19,19 @@ struct CalendarView: View {
                 MonthGrid(month: $month, selected: $selected, reminders: shownReminders, marks: Planner.marksByKey(marks))
                     .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 12, trailing: 8))
             }
+            if !hiddenKinds.isEmpty {
+                Section {
+                    HStack {
+                        Label("Hiding \(hiddenKindNames)", systemImage: "line.3.horizontal.decrease.circle.fill")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Show All") { hiddenKinds = [] }
+                            .font(.footnote.weight(.semibold))
+                            .buttonStyle(.borderless)
+                    }
+                }
+            }
             OccurrenceList(day: selected, actions: $actions, hiddenKinds: hiddenKinds, isCalendar: true)
         }
         .occurrenceActions($actions)
@@ -56,6 +69,10 @@ struct CalendarView: View {
     private var hiddenKinds: Set<ReminderKind> {
         get { Set(hiddenKindsRaw.split(separator: ",").compactMap { ReminderKind(rawValue: String($0)) }) }
         nonmutating set { hiddenKindsRaw = newValue.map(\.rawValue).sorted().joined(separator: ",") }
+    }
+
+    private var hiddenKindNames: String {
+        ReminderKind.allCases.filter(hiddenKinds.contains).map(\.title).joined(separator: ", ")
     }
 
     private var shownReminders: [Reminder] {
@@ -155,19 +172,45 @@ private struct MonthGrid: View {
     }
 
     /// One dot per reminder that day, up to three, in the color of its picture. Missed ones are red.
+    /// When there are more, the rarer ones win, so a daily reminder doesn't crowd out an every-3-weeks
+    /// one, and a small plus shows that some were left out.
     private func dots(for occurrences: [Occurrence], isSelected: Bool) -> some View {
         var seen = Set<UUID>()
-        let firsts = occurrences.filter { seen.insert($0.reminder.id).inserted }.prefix(3)
+        let perReminder = occurrences.filter { seen.insert($0.reminder.id).inserted }
+        let ranked = perReminder.enumerated().sorted { a, b in
+            let ra = Self.rank(a.element), rb = Self.rank(b.element)
+            return ra != rb ? ra < rb : a.offset < b.offset
+        }.map(\.element)
+        let firsts = Array(ranked.prefix(3)).sorted { $0.date < $1.date }
+        let hasMore = perReminder.count > firsts.count
         return HStack(spacing: 3) {
-            ForEach(Array(firsts), id: \.key) { occurrence in
+            ForEach(firsts, id: \.key) { occurrence in
                 Circle()
                     .fill(Planner.status(of: occurrence, marks: marks) == .missed
                           ? Color.red : dotColor(hue: occurrence.reminder.hue))
                     .overlay { if isSelected { Circle().strokeBorder(Color.white, lineWidth: 1) } }
                     .frame(width: 6, height: 6)
             }
+            if hasMore {
+                Image(systemName: "plus")
+                    .font(.system(size: 6, weight: .heavy))
+                    .frame(width: 6, height: 6)
+            }
         }
         .frame(height: 6)
+    }
+
+    /// Lower shows first: reminders that come round least often.
+    private static func rank(_ occurrence: Occurrence) -> Int {
+        switch occurrence.reminder.kind {
+        case .oneTime: 0
+        case .yearly: 1
+        case .monthly: 2
+        case .weekly: 3
+        case .cycle: 4
+        case .wakeUp: 5
+        case .daily: 6
+        }
     }
 
     private func dotColor(hue: Double) -> Color {
