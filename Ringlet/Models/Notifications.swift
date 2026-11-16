@@ -64,22 +64,48 @@ enum NotificationScheduler {
         await UNUserNotificationCenter.current().pendingNotificationRequests().count
     }
 
+    /// The reschedule that ran last, so a new one waits for it instead of interleaving with it.
+    private static var lastRun: Task<Void, Never>?
+
     /// Replaces the queued notifications with the next rings of every reminder that's turned on.
+    ///
+    /// Runs one at a time. Two runs at once (say, the app opening while a reminder is saved) could
+    /// otherwise let the older run add its rings back after the newer one cleared them, which left
+    /// nags queued for a reminder after Nag Me was turned off or it was marked done.
     static func reschedule(context: ModelContext) async {
+        let previous = lastRun
+        let run = Task { @MainActor in
+            await previous?.value
+            await rescheduleNow(context: context)
+        }
+        lastRun = run
+        await run.value
+    }
+
+    private static func rescheduleNow(context: ModelContext) async {
         let center = UNUserNotificationCenter.current()
-        let queued = await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix(queuePrefix) }
-        center.removePendingNotificationRequests(withIdentifiers: queued)
-        guard await isAuthorized() else { return }
+        let pending = await center.pendingNotificationRequests().map(\.identifier)
+        center.removePendingNotificationRequests(withIdentifiers: pending.filter { $0.hasPrefix(queuePrefix) })
 
         let reminders = (try? context.fetch(FetchDescriptor<Reminder>())) ?? []
         let marks = Planner.marksByKey((try? context.fetch(FetchDescriptor<OccurrenceMark>())) ?? [])
+        // A snooze is kept only while its ring still wants ringing: not done, skipped, turned off or deleted.
+        let staleSnoozes = pending.filter { id in
+            guard id.hasPrefix(snoozePrefix) else { return false }
+            let key = String(id.dropFirst(snoozePrefix.count))
+            guard let occurrence = Planner.occurrence(forKey: key, reminders: reminders, marks: marks) else { return true }
+            return !occurrence.reminder.isEnabled || marks[key]?.isDone == true || marks[key]?.isSkipped == true
+        }
+        center.removePendingNotificationRequests(withIdentifiers: staleSnoozes)
+        guard await isAuthorized() else { return }
+
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: .now)
         let now = Date.now
 
         var rings: [(date: Date, occurrence: Occurrence, event: AlarmEvent, number: Int)] = []
         // Start far enough back that nags running on from an earlier day still ring.
-        let nagDays = (reminders.map { $0.autoSnoozeMinutes * $0.autoSnoozeTimes }.max() ?? 0) / 1440 + 1
+        let nagDays = (reminders.filter(\.nags).map { $0.autoSnoozeMinutes * $0.autoSnoozeTimes }.max() ?? 0) / 1440 + 1
         // Look far enough ahead that a pre-alarm weeks before its ring still gets queued.
         let leadDays = (reminders.map(\.preAlarmMinutes).max() ?? 0) / 1440 + 1
         for offset in -nagDays..<(daysAhead + leadDays) {
@@ -92,7 +118,7 @@ enum NotificationScheduler {
                                   occurrence: occurrence, event: AlarmEvent.preAlarm, number: 0))
                 }
                 rings.append((date: occurrence.date, occurrence: occurrence, event: AlarmEvent.main, number: 0))
-                if reminder.autoSnoozeMinutes > 0 {
+                if reminder.nags {
                     for number in 1...max(1, reminder.autoSnoozeTimes) {
                         let date = occurrence.date.addingTimeInterval(Double(reminder.autoSnoozeMinutes * number) * 60)
                         rings.append((date: date, occurrence: occurrence, event: AlarmEvent.autoSnooze, number: number))

@@ -73,6 +73,16 @@ final class Reminder {
         set { kindRaw = newValue.rawValue }
     }
 
+    /// Whether Nag Me is on: it rings again until marked done.
+    var nags: Bool { autoSnoozeMinutes > 0 }
+
+    /// "Every 30 min, up to 5 more times", for showing which reminders nag.
+    var nagSummary: String {
+        let every = autoSnoozeMinutes % 60 == 0
+            ? "\(autoSnoozeMinutes / 60) hr" : "\(autoSnoozeMinutes) min"
+        return "Every \(every), up to \(autoSnoozeTimes) more time\(autoSnoozeTimes == 1 ? "" : "s")"
+    }
+
     var sound: ReminderSound {
         get { ReminderSound(rawValue: soundRaw) ?? .chime }
         set { soundRaw = newValue.rawValue }
