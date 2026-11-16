@@ -46,6 +46,26 @@ struct SettingsView: View {
                     Text("When Ringlet is open, a ring fills the screen. Turn this off to get a normal banner instead. Reminders still show on the lock screen and in Notification Center either way.")
                 }
 
+                Section {
+                    let nagging = reminders.filter(\.nags).sorted { $0.message < $1.message }
+                    if nagging.isEmpty {
+                        Text("No reminders nag you.").foregroundStyle(.secondary)
+                    } else {
+                        ForEach(nagging) { reminder in
+                            LabeledContent(reminder.message.isEmpty ? "Reminder" : reminder.message,
+                                           value: reminder.nagSummary)
+                        }
+                        Button("Turn Off Nag Me for All", role: .destructive) {
+                            nagging.forEach { $0.autoSnoozeMinutes = 0 }
+                            save()
+                        }
+                    }
+                } header: {
+                    Text("Nag Me")
+                } footer: {
+                    Text("Nag Me is set on each reminder, and rings again until you mark it done. These reminders have it on, including any brought over from Alarmed with its nag setting. Edit a reminder to change just that one.")
+                }
+
                 Section("Sounds") {
                     ForEach(ReminderSound.allCases.filter { $0 != .silent }) { sound in
                         Button {
